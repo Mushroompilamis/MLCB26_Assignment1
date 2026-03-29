@@ -8,6 +8,8 @@ from sklearn.compose import ColumnTransformer
 from sklearn.linear_model import LinearRegression
 from sklearn.metrics import mean_squared_error,mean_absolute_error,r2_score
 from scipy.stats import pearsonr
+from sklearn.linear_model import ElasticNet,BayesianRidge
+from sklearn.svm import SVR
 
 ###########TASK 1###########
 # 1.2 Preprocessing
@@ -70,10 +72,6 @@ def  preprocessor_pipeline(cpg,metadata):
     preprocessor=ColumnTransformer(transformers=transformers)
     return preprocessor
 ###############################
-#Feature matrices
-
-
-
 #1.3 Exploratory analysis
 # Creating the dataset summary function
 def data_summary(data,name):
@@ -211,12 +209,105 @@ def evaluation_of_model (y_true,y_predict,n_bootstrap=100,seed=42):
     print(f"Pearson r: {full_r:.4f} (95% CI: {final_results['pearson_ci'][0]:.4f} - {final_results['pearson_ci'][1]:.4f})")
     return final_results
 
+###########################################
+#2.2  Three regression models at default hyperparameters
+
+#MODELS with default parameters
+
+#ElasticNet — L1+L2 regularised linear regression
+def model_elasticnet(X_train,y_train,X_val):
+    print("################Training of ElasticNet###############")
+    model = ElasticNet()
+    model.fit(X_train, y_train)
+    y_predict = model.predict(X_val)
+    return model, y_predict
+
+#SVR — Support Vector Regression with RBF kernel
+def svr_model(X_train,y_train,X_val):
+    print("###############Training of SVR###############")
+    model = SVR(kernel="rbf")
+    model.fit(X_train, y_train)
+    y_predict = model.predict(X_val)
+    return model, y_predict
+
+#BayesianRidge — Bayesian linear regression with automatic relevance determination
+def bayesianridge_model(X_train, y_train, X_val):
+    print("###############Training of BayesianRidge model###############")
+    model = BayesianRidge()
+    model.fit(X_train, y_train)
+    y_predict = model.predict(X_val)
+    return model, y_predict
+
+#Derivables
+#report_table
+def report_table(results):
+    rows = []
+    for name, res in results.items():
+        rows.append({
+            "Model": name,
+            "RMSE (mean ± CI)": f"{res['rmse_mean']:.4f} ({res['rmse_ci'][0]:.4f} - {res['rmse_ci'][1]:.4f})",
+            "MAE": f"{res['mae_mean']:.4f}",
+            "R^2": f"{res['r2_mean']:.4f}",
+            "Pearson r": f"{res['pearson_mean']:.4f}"
+        })
+
+    df = pd.DataFrame(rows)
+    print("Report table of Model Performance:")
+    print(df.to_string(index=False))
+    return df
 
 
+#Boxplots
+def bootstrap_boxplots(results,path="../figures/bootstrap_boxplots_rmse_r2.png"):
+    mname = list(results.keys())
+    # Extract bootstrap distributions
+    rmse_data = [results[m]["rmse_scores"] for m in mname]
+    r2_data   = [results[m]["r2_scores"] for m in mname]
+    fig, axes = plt.subplots(1, 2, figsize=(14, 6))
 
+    #For RMSE
+    axes[0].boxplot(rmse_data, patch_artist=True)
+    axes[0].set_title("Bootstrap RMSE Distribution", fontsize=12)
+    axes[0].set_ylabel("RMSE in years")
+    axes[0].set_xlabel("Model")
+    axes[0].set_xticks(range(1, len(mname) + 1))
+    axes[0].set_xticklabels(mname, rotation=20)
 
+    # For R^2
+    axes[1].boxplot(r2_data, patch_artist=True)
+    axes[1].set_title("Bootstrap R^2 Distribution", fontsize=12)
+    axes[1].set_ylabel("R^2")
+    axes[1].set_xlabel("Model")
+    axes[1].set_xticks(range(1, len(mname) + 1))
+    axes[1].set_xticklabels(mname, rotation=20)
 
+    plt.tight_layout()
+    plt.savefig(path, dpi=300, bbox_inches='tight')
+    plt.show()
+    plt.close()
 
+#Checking for overfitting
+def train_vs_val_all_models(models, X_train, y_train, X_val, y_val):
+    results = []
+    for name, model in models.items():
+        train_pred = model.predict(X_train)
+        val_pred = model.predict(X_val)
+        train_rmse = np.sqrt(mean_squared_error(y_train, train_pred))
+        val_rmse = np.sqrt(mean_squared_error(y_val, val_pred))
+        train_r2 = r2_score(y_train, train_pred)
+        val_r2 = r2_score(y_val, val_pred)
+        results.append({
+            "Model": name,
+            "Train RMSE": train_rmse,
+            "Val RMSE": val_rmse,
+            "Train R^2": train_r2,
+            "Val R^2": val_r2
+        })
+
+    return pd.DataFrame(results)
+
+###########TASK 3###########
+#3.1  Stability Selection
 
 
 
