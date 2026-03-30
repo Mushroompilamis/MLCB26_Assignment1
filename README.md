@@ -14,6 +14,11 @@ Source You will work with GSE40279 (Hannum et al., 2013), a publicly available d
 | development_data .csv |  456 | Used in preprocessing, feature selection, training, cross-validation tuning. |
 | evaluation_data. csv | 100  |  Final evaluation. |
 
+| Task  | Status | Date Added (DD/MM/YYYY) | Date Completed (DD/MM/YYYY) | Assigned to |
+| ----- | :---: | :---: | :---: | :---: |
+| Initialization of the game| ✅ | 13/9/2025 | - | <img src="./logos/contribution signature.png" width=50px><br>PointBlanck |
+| Main Character Design | ❌ | 14/9/2025 | - | Megumi (Contribution Signature: TBD) |
+| ... | ... | ... | ... | ... |
 
 ## Structure of repository
 
