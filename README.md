@@ -25,7 +25,7 @@ Source You will work with GSE40279 (Hannum et al., 2013), a publicly available d
 
 ## Libraries of use
 
-numpy, pandas, scikit-learn, scipy, mrmr-selection, optuna, matplotlib
+```numpy, pandas, scikit-learn, scipy, mrmr-selection, optuna, matplotlib```
 
 ## Selected model
 
