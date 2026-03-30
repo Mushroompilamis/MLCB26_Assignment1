@@ -18,13 +18,13 @@ Source You will work with GSE40279 (Hannum et al., 2013), a publicly available d
 ## Structure of repository
 
 <ul>
-<li> src/ —functions.py `(All pipeline functions)` </li>
+<li> src/ —functions.py **(All pipeline functions)** </li>
 <li>notebooks/ — Jupyter notebook (data_exploration.ipynb with all the Tasks execution)</li>
 <li>data/ — dataset files (.gitignore for data commitment)</li>
 <li>models/ — saved best model (best_model.okl)</li>
 <li>figures/ — generated plots (Savied plots that were generated from data_exploration.ipynb)</li>
-
 </ul>
+
 
 ## Libraries of use
 
