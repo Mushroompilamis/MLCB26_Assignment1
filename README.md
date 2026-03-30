@@ -17,7 +17,7 @@ The assignment is separated into 4 different implementation steps: a) the datase
 | development_data .csv |  456 | Used in preprocessing, feature selection, training, cross-validation tuning. |
 | evaluation_data. csv | 100  |  Final evaluation. |
 
-### Data Info
+### Structure of data
 a) Each row is a sample (labelled by GEO sample ID). Each column is either a CpG feature  (named cgXXXXXXXX), an age column (integer years, the regression target), a sex column  (F/M), or an ethnicity column. The 1000 CpG features included in the datasets were selected from the full 480K array by absolute Spearman correlation with age across all samples.   
 b) To simulate real-world data quality, some of the CpG values have been randomly set to NaN.
 
