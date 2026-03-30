@@ -38,7 +38,7 @@ b) Columns include:
 From the original ~480K CpGs, the 1000 CpG positions were selected by absolutre Spearman correlation with age across the dataset.
 
 #### Missing Values
-To stimulate real world conditions, some CpG values were randomly se to NaN.
+To stimulate real world conditions, some CpG values were randomly set to NaN.
 
 ---
 
@@ -56,17 +56,10 @@ To stimulate real world conditions, some CpG values were randomly se to NaN.
 ## Libraries of use
 
 ```
-numpy, 
-pandas,
-scikit-learn,
-scipy,
-mrmr-selection,
-matplotlib,
-pickle
+numpy, pandas,scikit-learn,scipy,mrmr-selection,matplotlib,pickle
 ```
 
 ---
-
 
 ## Best Selected model
 
