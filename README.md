@@ -24,12 +24,17 @@ Each `CpG` site --> Represented by a beta value `(range 0-1)`, indicatin if havi
 
 ### Data Structure
 <ul>
-<li>Each row represents a sample (GEO ID)./<li> 
-<li>Columns:/<li>
-  <li>
-Each column is either a CpG feature  (named cgXXXXXXXX), an age column (integer years, the regression target), a sex column  (F/M), or an ethnicity column. The 1000 CpG features included in the datasets were selected from the full 480K array by absolute Spearman correlation with age across all samples.   
-b) To simulate real-world data quality, some of the CpG values have been randomly set to NaN.
+<li>Each `row represents a sample` (GEO ID)
+<li>Columns include:
+  <li>CpG features `(cgXXXXXX)`</li>
+  <li>`age` (target variable)</li>
+  <li>`sex` (categorical)</li>
+  <li>`ethnicity` (categorical)</li>
+</ul>
 
+
+#### Missing Values
+To stimulate real world conditions, some CpG values were randomly se to NaN.
 ## Structure of repository
 
 <ul>
