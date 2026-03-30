@@ -18,13 +18,12 @@ Source You will work with GSE40279 (Hannum et al., 2013), a publicly available d
 ## Structure of repository
 
 <ul>
-<li>
-src/ —functions.py (Total functions of use)
-notebooks/ — Jupyter notebook (Testing the results of the functions. Justification and Discussion of the Results)
-data/ — dataset files (.gitignore for data commitment)
-models/ — saved model files
-figures/ — generated plots (Saving the plots generated in Jupyter notebook)
-</li>
+<li> src/ —functions.py (Total functions of use)</li>
+<li>notebooks/ — Jupyter notebook (Testing the results of the functions. Justification and Discussion of the Results)</li>
+<li>data/ — dataset files (.gitignore for data commitment)</li>
+<li>models/ — saved model files</li>
+<li>figures/ — generated plots (Saving the plots generated in Jupyter notebook)</li>
+
 </ul>
 
 ## Libraries of use
