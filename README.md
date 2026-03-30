@@ -23,15 +23,15 @@ Each `CpG` site --> Represented by a beta value `(range 0-1)`, indicatin if havi
 | evaluation_data. csv | 100  |  Final evaluation |
 
 ### Data Structure
-<ul>
-<li>Each `row represents a sample` (GEO ID)
-<li>Columns include:
-  <li>CpG features `(cgXXXXXX)`</li>
-  <li>`age` (target variable)</li>
-  <li>`sex` (categorical)</li>
-  <li>`ethnicity` (categorical)</li>
-</ul>
+a) Each `row represents a sample` (GEO ID)
+b) Columns include:
+  ▻CpG features `(cgXXXXXX)`
+  ▻`age` (target variable)
+  ▻`sex` (categorical)
+  ▻`ethnicity` (categorical)
 
+#### Data Construction
+From the original ~480K CpGs, the 1000 CpG positions were selected by absolutre Spearman correlation with age across the dataset.
 
 #### Missing Values
 To stimulate real world conditions, some CpG values were randomly se to NaN.
