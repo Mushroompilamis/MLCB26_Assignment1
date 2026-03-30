@@ -13,7 +13,7 @@ Source You will work with GSE40279 (Hannum et al., 2013), a publicly available d
 | ----- | :---: | :---: | 
 | development_data .csv |  456 | Used in preprocessing, feature selection, training, cross-validation tuning. |
 | evaluation_data. csv | 100  |  Final evaluation. |
-| ... | ... | 
+
 
 ## Structure of repository
 
