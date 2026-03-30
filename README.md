@@ -63,6 +63,9 @@ numpy, pandas,scikit-learn,scipy,mrmr-selection,matplotlib,pickle
 ---
 
 ## Best Selected model
+Following hyperparameter tuning and final evaluation on the locked evaluation set, `ElasticNet` had the lowest bootstrap RMSE mean **(5.0549)** among the three tuned models (ElasticNet, SVR, BayesianRidge).   
+
+*ElasticNet --> Selected as the final model*
 
 ---
 
