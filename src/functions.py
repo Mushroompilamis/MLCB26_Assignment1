@@ -1,21 +1,72 @@
+#Libraries
+import sys
+import os
+import pickle
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
+from sklearn.model_selection import train_test_split
 from sklearn.pipeline import Pipeline
 from sklearn.impute import SimpleImputer
 from sklearn.preprocessing import StandardScaler, OneHotEncoder
 from sklearn.compose import ColumnTransformer
 from sklearn.linear_model import LinearRegression
 from sklearn.metrics import mean_squared_error,mean_absolute_error,r2_score
-from scipy.stats import pearsonr
-from scipy.stats import spearmanr
 from sklearn.linear_model import ElasticNet,BayesianRidge
+from sklearn.model_selection import RandomizedSearchCV,KFold
 from sklearn.svm import SVR
+from scipy.stats import pearsonr, alpha
+from scipy.stats import spearmanr
+from scipy.stats import loguniform,uniform
 from mrmr import mrmr_regression
+import optuna
 
+#######################################################################################
 ###########TASK 1###########
 # 1.2 Preprocessing
+#####################################################################################
+#Loading the files of dev and eval
+def loading_files(dev_path,eval_path):
+    dev_data = pd.read_csv(dev_path, index_col=0)
+    print("Development set", dev_data.shape, dev_data.head())
+    print("\n")
+    eval_data = pd.read_csv(eval_path, index_col=0)
+    print("Evaluation set (locked)", eval_data.shape, eval_data.head())
+    print("Samples of each data:",len(dev_data), len(eval_data))
 
+    return dev_data,eval_data
+
+#######################################################################################
+#Function for splitting
+def split_data(dev_data, eval_data):
+    X=dev_data.drop(columns=["age"])
+    y=dev_data["age"]
+    #Bins Creation for stratification
+    y_bins=pd.qcut(y,5,duplicates='drop')
+
+    # Split the data
+    X_train, X_val, y_train, y_val = train_test_split(X, y, test_size=0.2, random_state=42,stratify=y_bins)
+
+    train_data=X_train.copy()
+    train_data["age"]=y_train
+
+    val_data=X_val.copy()
+    val_data["age"]=y_val
+
+    #Percentage Split
+    total_data=len(train_data) + len(val_data)
+    train_pre= len(train_data)/ total_data*100
+    val_pre= len(val_data)/ total_data*100
+
+    #Creating table of the data split information for better visualization
+    table_summary = pd.DataFrame({
+    "Split": ["Train", "Validation"],
+    "Samples": [len(train_data), len(val_data)],
+    "Percentage": [train_pre, val_pre]})
+    print(table_summary)
+    return train_data,val_data, eval_data
+
+#######################################################################################
 # Checking the missing values in the data
 def check_missing_values(data):
     #Total missing values of data
@@ -27,8 +78,8 @@ def check_missing_values(data):
     sorted_miss= miss_per_col.sort_values(ascending=False)
     print("\nTop five missing:", sorted_miss.head(5))
 
+#######################################################################################
 # Feature Scaring & Categorical Features process setting
-###############################
 def feature_gather(data):
     metadata=[i for i in["sex","ethnicity"]if i in data.columns]
     cpg=[i for i in data.columns if i.startswith("cg")]
@@ -372,18 +423,16 @@ def choosing_k_value(X_train, X_val, k_values=None, path="../figures/mrmr_k_sele
         model.fit(X_train_processed, X_train["age"])
         y_val_predict = model.predict(X_val_processed)
         rmse = mean_squared_error(X_val["age"], y_val_predict) ** 0.5
-        results.append({
-            "K": k,
-            "Validation RMSE": rmse
-        })
-        print(f"K: {k} with Validation RMSE: {rmse:.4f}")
+        r2=r2_score(X_val["age"], y_val_predict)
+        results.append({"K": k,"Validation RMSE": rmse,"Validation R^2": r2})
+        print(f"K: {k} with Validation RMSE: {rmse:.4f} and Validation R^2: {r2:.4f}")
 
     #dataframe of results
     results = pd.DataFrame(results)
     b_rmse = results["Validation RMSE"].min()
     b_candidates = results[results["Validation RMSE"] == b_rmse]
     b_k = b_candidates["K"].min()
-    print(f"\nThe best chosen K is: {b_k} with Validation RMSE: {b_rmse:.4f}")
+    print(f"\nThe best chosen K is: {b_k} with Validation RMSE: {b_rmse:.4f} and Validation R^2:{r2:.4f}")
 
     # Plot k vs RMSE
     plt.figure(figsize=(7, 4))
@@ -481,12 +530,12 @@ def feature_comparison(X_train,X_val,stable_features,mrmr_features,b_k):
             "Validation R^2": r2
         })
 
-        print(f"\n{method})
+        print(f"\n  {method} ")
         print(f"Number of selected features : {len(feature)}")
         if method == "mRMR":
-            print(f"Chosen K                    : {b_k}")
-        print(f"Validation RMSE             : {rmse:.4f}")
-        print(f"Validation R^2            : {r2:.4f}")
+         print(f"Chosen K  : {b_k}")
+        print(f"Validation RMSE  : {rmse:.4f}")
+        print(f"Validation R^2 : {r2:.4f}")
 
     comparison_df = pd.DataFrame(results)
 
@@ -510,9 +559,332 @@ def feature_comparison(X_train,X_val,stable_features,mrmr_features,b_k):
 
     return comparison_df, selected_features, selected_method
 
+###########TASK 4###########
+# 4.1  Hyperparameter tuning
+def model_tuning(dev_data,selected_features,trails=40,seed=42):
+    print("\nHyperparameter tuning on full dev_data")
+    print(len(selected_features))
+
+    X_dev = dev_data[selected_features]
+    y_dev = dev_data["age"].values
+    #Randomize search - 5-fold cross-val
+    cv = KFold(n_splits=5, shuffle=True, random_state=seed)
+    #For each model pipeline
+    #EN
+    elastic_pip = Pipeline([("preprocessor", preprocessor_pipeline(cpg=selected_features, metadata=[])),("model", ElasticNet())])
+    elastic_search = RandomizedSearchCV(
+        estimator=elastic_pip,
+        param_distributions={
+            "model__alpha": loguniform(0.001, 10),
+            "model__l1_ratio": uniform(0.1, 0.9)
+        },
+        n_iter=trails,
+        scoring="neg_root_mean_squared_error",
+        cv=cv,
+        refit=True,
+        random_state=seed,
+        n_jobs=-1
+    )
+
+    #SVR
+    svr_pip = Pipeline([("preprocessor", preprocessor_pipeline(cpg=selected_features, metadata=[])),("model", SVR())])
+    svr_search = RandomizedSearchCV(
+        estimator=svr_pip,
+        param_distributions={
+            "model__C": loguniform(0.1, 500),
+            "model__epsilon": [0.01, 0.1, 0.5, 1.0],
+            "model__kernel": ["rbf", "linear"]
+        },
+        n_iter=trails,
+        scoring="neg_root_mean_squared_error",
+        cv=cv,
+        refit=True,
+        random_state=seed,
+        n_jobs=-1
+    )
+
+    #BR
+    bayes_pip = Pipeline([("preprocessor", preprocessor_pipeline(cpg=selected_features, metadata=[])),("model", BayesianRidge())])
+    bayes_search = RandomizedSearchCV(
+        estimator=bayes_pip,
+        param_distributions={
+            "model__alpha_1": loguniform(1e-7, 1e-3),
+            "model__alpha_2": loguniform(1e-7, 1e-3),
+            "model__lambda_1": loguniform(1e-7, 1e-3),
+            "model__lambda_2": loguniform(1e-7, 1e-3)
+        },
+        n_iter=trails,
+        scoring="neg_root_mean_squared_error",
+        cv=cv,
+        refit=True,
+        random_state=seed,
+        n_jobs=-1
+    )
+
+    # Fit searches
+    print("____Tuning____")
+    print("ElasticNet")
+    elastic_search.fit(X_dev, y_dev)
+    #print("Best ElasticNet params:", elastic_search.best_params_)
+    #print("Best ElasticNet CV RMSE:", -elastic_search.best_score_)
+    print("SVR")
+    svr_search.fit(X_dev, y_dev)
+    #print("Best SVR params:", svr_search.best_params_)
+    #print("Best SVR CV RMSE:", -svr_search.best_score_)
+    print("BayesianRidge")
+    bayes_search.fit(X_dev, y_dev)
+    #print("Best BayesianRidge params:", bayes_search.best_params_)
+    #print("Best BayesianRidge CV RMSE:", -bayes_search.best_score_)
+
+
+    best_models = {
+        "ElasticNet": elastic_search.best_estimator_,
+        "SVR": svr_search.best_estimator_,
+        "BayesianRidge": bayes_search.best_estimator_
+    }
+
+    # dataset of best scores
+    tuning_results = pd.DataFrame([
+        {   "Best Scores"
+            "Model": "ElasticNet",
+            "RMSE": -elastic_search.best_score_,
+            "Params": elastic_search.best_params_
+        },
+        {   "Best Scores"
+            "Model": "SVR",
+            "RMSE": -svr_search.best_score_,
+            "Params": svr_search.best_params_
+        },
+        {   "Best Scores"
+            "Model": "BayesianRidge",
+            "RMSE": -bayes_search.best_score_,
+            "Params": bayes_search.best_params_
+        }
+    ])
+
+    return best_models, tuning_results
 
 
 
+# 4.2  Final model evaluation
+#Evaluation
+def evaluation(model, eval_data, best_features, bootstrap=1000, seed=42):
+    print("\nEvaluating with evaluation data")
+    X_eval = eval_data[best_features]
+    y_eval = eval_data["age"].values
+    y_eval_predict = model.predict(X_eval)
+    rng = np.random.RandomState(seed)
+    indices = np.arange(len(y_eval))
+    ##########
+    rmse_scores = []
+    mae_scores = []
+    r2_scores = []
+    pearson_scores = []
+    for _ in range(bootstrap):
+        sample_idx = rng.choice(indices, size=len(indices), replace=True)
+        y_sample = y_eval[sample_idx]
+        y_pred_sample = y_eval_predict[sample_idx]
+    ####################################
+        rmse = mean_squared_error(y_sample, y_pred_sample) ** 0.5
+        mae = mean_absolute_error(y_sample, y_pred_sample)
+        r2 = r2_score(y_sample, y_pred_sample)
+        r, _ = pearsonr(y_sample, y_pred_sample)
+    ####################################
+        rmse_scores.append(rmse)
+        mae_scores.append(mae)
+        r2_scores.append(r2)
+        pearson_scores.append(r)
+    rmse_scores = np.array(rmse_scores)
+    mae_scores = np.array(mae_scores)
+    r2_scores = np.array(r2_scores)
+    pearson_scores = np.array(pearson_scores)
+
+    ####################################
+    results = {
+        "RMSE_mean": rmse_scores.mean(),
+        "RMSE_std": rmse_scores.std(ddof=1),
+        "RMSE_CI": np.percentile(rmse_scores, [2.5, 97.5]),
+        "rmse_scores": rmse_scores,
+
+        "MAE_mean": mae_scores.mean(),
+        "MAE_std": mae_scores.std(ddof=1),
+        "MAE_CI": np.percentile(mae_scores, [2.5, 97.5]),
+        "mae_scores": mae_scores,
+
+        "R2_mean": r2_scores.mean(),
+        "R2_std": r2_scores.std(ddof=1),
+        "R2_CI": np.percentile(r2_scores, [2.5, 97.5]),
+        "r2_scores": r2_scores,
+
+        "Pearson_mean": pearson_scores.mean(),
+        "Pearson_std": pearson_scores.std(ddof=1),
+        "Pearson_CI": np.percentile(pearson_scores, [2.5, 97.5]),
+        "pearson_scores": pearson_scores
+    }
+
+    print("\nEvaluation of all three tuned models on the evaluation set using bootstrap resampling:")
+    print(f"RMSE: mean={results['RMSE_mean']:.4f}, std={results['RMSE_std']:.4f}, 95% CI=({results['RMSE_CI'][0]:.4f}, {results['RMSE_CI'][1]:.4f})")
+    print(f"MAE: mean={results['MAE_mean']:.4f}, std={results['MAE_std']:.4f}, 95% CI=({results['MAE_CI'][0]:.4f}, {results['MAE_CI'][1]:.4f})")
+    print(f"R²: mean={results['R2_mean']:.4f}, std={results['R2_std']:.4f}, 95% CI=({results['R2_CI'][0]:.4f}, {results['R2_CI'][1]:.4f})")
+    print(f"Pearson r : mean={results['Pearson_mean']:.4f}, std={results['Pearson_std']:.4f}, 95% CI=({results['Pearson_CI'][0]:.4f}, {results['Pearson_CI'][1]:.4f})")
+
+    return results
+
+
+#table asked
+def query_table(model, stage_res):
+    rows = []
+
+    for stage, res in stage_res.items():
+        rows.append({
+            "Model": model,
+            "Stage": stage,
+            "RMSE_mean": f"{res['RMSE_mean']:.3f}",
+            "95% CI": f"[{res['RMSE_CI'][0]:.3f}, {res['RMSE_CI'][1]:.3f}]",
+            "MAE": f"{res['MAE_mean']:.3f}",
+            "R²": f"{res['R2_mean']:.3f}",
+            "Pearson r": f"{res['Pearson_mean']:.3f}"
+        })
+
+    df = pd.DataFrame(rows)
+    print(df.to_string(index=False))
+    return df
+
+
+#boxplots
+def bootstrap_boxplots_4_2(results_dict, path="../figures/final_bootstrap_boxplots.png"):
+    model_names = list(results_dict.keys())
+    rmse_data = [results_dict[m]["rmse_scores"] for m in model_names]
+    mae_data = [results_dict[m]["mae_scores"] for m in model_names]
+    r2_data = [results_dict[m]["r2_scores"] for m in model_names]
+    pearson_data = [results_dict[m]["pearson_scores"] for m in model_names]
+    fig, axes = plt.subplots(2, 2, figsize=(14, 10))
+
+    #Boxplot info (RMSE,MAE,R^2,Pearson r)
+    axes[0, 0].boxplot(rmse_data)
+    axes[0, 0].set_title("Bootstrap RMSE Distribution")
+    axes[0, 0].set_xticks(range(1, len(model_names) + 1))
+    axes[0, 0].set_xticklabels(model_names, rotation=20)
+    axes[0, 0].set_ylabel("RMSE")
+    axes[0, 1].boxplot(mae_data)
+    axes[0, 1].set_title("Bootstrap MAE Distribution")
+    axes[0, 1].set_xticks(range(1, len(model_names) + 1))
+    axes[0, 1].set_xticklabels(model_names, rotation=20)
+    axes[0, 1].set_ylabel("MAE")
+    axes[1, 0].boxplot(r2_data)
+    axes[1, 0].set_title("Bootstrap R^2 Distribution")
+    axes[1, 0].set_xticks(range(1, len(model_names) + 1))
+    axes[1, 0].set_xticklabels(model_names, rotation=20)
+    axes[1, 0].set_ylabel("R^2")
+    axes[1, 1].boxplot(pearson_data)
+    axes[1, 1].set_title("Bootstrap Pearson r Distribution")
+    axes[1, 1].set_xticks(range(1, len(model_names) + 1))
+    axes[1, 1].set_xticklabels(model_names, rotation=20)
+    axes[1, 1].set_ylabel("Pearson r")
+
+    plt.tight_layout()
+    plt.savefig(path, dpi=200, bbox_inches="tight")
+    plt.show()
+    plt.close()
+
+def scatter_plot_realvspredicted(models_dict, eval_data, best_features, path="../figures/realvspredicted_scatter_plot.png"):
+
+    X_eval = eval_data[best_features]
+    y_eval = eval_data["age"].values
+
+    fig, axes = plt.subplots(1, 3, figsize=(18, 5))
+
+    for axis, (model_name, model) in zip(axes, models_dict.items()):
+        y_predict = model.predict(X_eval)
+
+        axis.scatter(y_eval, y_predict, edgecolor="black",alpha=0.7)
+        min_val = min(y_eval.min(), y_predict.min())
+        max_val = max(y_eval.max(), y_predict.max())
+        axis.plot([min_val, max_val],[min_val, max_val],color="red",linestyle="--",linewidth=2,label="Ideal fit")
+        axis.set_title(model_name)
+        axis.set_xlabel("Actual Age")
+        axis.set_ylabel("Predicted Age")
+
+    plt.tight_layout()
+    plt.savefig(path, dpi=200, bbox_inches="tight")
+    plt.show()
+    plt.close()
+
+def fs_eval_models(X_train, X_val, selected_features):
+    X_tr = X_train[selected_features]
+    X_v = X_val[selected_features]
+    y_train = X_train["age"].values
+    y_val = X_val["age"].values
+    #################
+    preprocessor = preprocessor_pipeline(cpg=selected_features, metadata=[])
+    X_train_processed = preprocessor.fit_transform(X_tr)
+    X_val_processed = preprocessor.transform(X_v)
+
+   #Models
+    elastic_model, elastic_predict = model_elasticnet(X_train_processed, y_train, X_val_processed)
+    svr_rbf_k_model, svr_predict = svr_model(X_train_processed, y_train, X_val_processed)
+    bayes_model, bayes_predict = bayesianridge_model(X_train_processed, y_train, X_val_processed)
+
+    elastic_fs = evaluation_of_model(y_val, elastic_predict)
+    svr_fs = evaluation_of_model(y_val, svr_predict)
+    bayes_fs = evaluation_of_model(y_val, bayes_predict)
+
+    return elastic_fs, svr_fs, bayes_fs
+
+#4.3  Model selection and final model
+
+def selection_save_final(tuned_results,tuned_models,model_dir="models", model_filename="best_model.pkl"):
+    rmse_summary = {
+        model_name: result_dict["RMSE_mean"]
+        for model_name, result_dict in tuned_results.items()
+    }
+    selected_name = min(rmse_summary, key=rmse_summary.get)
+    selected_model = tuned_models[selected_name]
+
+    print("\nFinal model selection")
+    print("-" * 40)
+    for model_name, rmse_value in rmse_summary.items():
+        print(f"{model_name:<15} RMSE(mean): {rmse_value:.4f}")
+    print("-" * 40)
+    print(f"Selected best model: {selected_name}")
+    print(f"Best RMSE(mean): {rmse_summary[selected_name]:.4f}")
+
+    #######################
+    os.makedirs(model_dir, exist_ok=True)
+    path = os.path.join(model_dir, model_filename)
+
+    with open(path, "wb") as f:
+        pickle.dump(selected_model, f, protocol=pickle.HIGHEST_PROTOCOL)
+    print("Model saved")
+    with open(path, "rb") as f:
+        reloaded_model = pickle.load(f)
+    print("Model loaded")
+
+
+    return selected_name, reloaded_model, path
+
+
+def plot_best_model_real_predict(y_true, y_predict, model_name, dir="figures"):
+    y_true = np.asarray(y_true)
+    y_predict = np.asarray(y_predict)
+
+    os.makedirs(dir, exist_ok=True)
+    path = os.path.join(dir, f"predicted_vs_actual_{model_name}.png")
+
+    min_val = min(y_true.min(), y_predict.min())
+    max_val = max(y_true.max(), y_predict.max())
+
+    plt.figure(figsize=(6, 6))
+    plt.scatter(y_true, y_predict, alpha=0.7, edgecolor="black")
+    plt.plot([min_val, max_val], [min_val, max_val], linestyle="--", label="Ideal fit")
+    plt.xlabel("Real Age")
+    plt.ylabel("Predicted Age")
+    plt.title(f"Predicted vs Real Age (in years) - {model_name}")
+    plt.legend()
+    plt.tight_layout()
+    plt.savefig(path, dpi=180, bbox_inches="tight")
+    plt.show()
+    plt.close()
 
 
 
