@@ -11,6 +11,8 @@ The assignment is separated into 4 different implementation steps:
 `c)  feature selection in which by using the model with better results in RMSE, MAE, R², and Pearson r with 95% confidence intervals (CI) and does not over or underfit of the previous steps and then`       
 `d), by using the selected feature set from the previous step, the final tuning and evaluation of the model of use occurs.`   
 
+---
+
 ## Dataset before pre-processing
 
 The `GSE40279` (Hannum et al., 2013), a publicly available dataset of whole-blood DNA methylation profiles measured using the Illumina 450K microarray, was used.                                          Dataset  -->  `656 samples` from individuals aged `19–101 years`, with total features (positions) an approximation of `480,000 CpG positions`.
@@ -23,20 +25,22 @@ Each `CpG` site --> Represented by a beta value `(range 0-1)`, indicatin if havi
 | evaluation_data. csv | 100  |  Final evaluation |
 
 ### Data Structure
-a) Each `row represents a sample` (GEO ID)
-b) Columns include:
-  ▻CpG features `(cgXXXXXX)`
-  ▻`age` (target variable)
-  ▻`sex` (categorical)
-  ▻`ethnicity` (categorical)
+a) Each `row represents a sample` (GEO ID)  
+b) Columns include:  
+  ▻CpG features `(cgXXXXXX)`  
+  ▻`age` (target variable)  
+  ▻`sex` (categorical)  
+  ▻`ethnicity` (categorical)  
 
 #### Data Construction
 From the original ~480K CpGs, the 1000 CpG positions were selected by absolutre Spearman correlation with age across the dataset.
 
 #### Missing Values
 To stimulate real world conditions, some CpG values were randomly se to NaN.
-## Structure of repository
 
+---
+
+## Structure of repository
 <ul>
 <li> src/ —functions.py (All pipeline functions) </li>
 <li>notebooks/ — Jupyter notebook (data_exploration.ipynb with all the Tasks execution)</li>
@@ -45,7 +49,7 @@ To stimulate real world conditions, some CpG values were randomly se to NaN.
 <li>figures/ — generated plots (Savied plots that were generated from data_exploration.ipynb)</li>
 </ul>
 
-
+---
 
 ## Libraries of use
 
@@ -59,7 +63,12 @@ matplotlib,
 pickle
 ```
 
+---
+
+
 ## Best Selected model
+
+---
 
 ## Assignment Tasks 
 [✓]  Task 1  
