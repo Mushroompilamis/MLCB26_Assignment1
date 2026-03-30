@@ -13,7 +13,7 @@ The assignment is separated into 4 different implementation steps:
 
 ---
 
-## Dataset before pre-processing
+## Dataset (Before Preprocessing)
 
 The `GSE40279` (Hannum et al., 2013), a publicly available dataset of whole-blood DNA methylation profiles measured using the Illumina 450K microarray, was used.                                          Dataset  -->  `656 samples` from individuals aged `19–101 years`, with total features (positions) an approximation of `480,000 CpG positions`.
 Each `CpG` site --> Represented by a beta value `(range 0-1)`, indicatin if having full or no methylation. 
