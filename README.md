@@ -25,7 +25,15 @@ Source You will work with GSE40279 (Hannum et al., 2013), a publicly available d
 
 ## Libraries of use
 
-```numpy, pandas, scikit-learn, scipy, mrmr-selection, optuna, matplotlib```
+```
+numpy, 
+pandas,
+scikit-learn,
+scipy,
+mrmr-selection,
+optuna,
+matplotlib
+```
 
 ## Selected model
 
@@ -33,7 +41,7 @@ Source You will work with GSE40279 (Hannum et al., 2013), a publicly available d
 | Task 1  | ✓ |
 | Task 2  | ✓ |
 | Task 3  | ✓ |
-| Task 4 |     |
-| Bonus A  | |
-| Bonus B  |  |
+| Task 4  |    |
+| Bonus A |    |
+| Bonus B  |   |
 
