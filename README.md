@@ -1,7 +1,7 @@
 # Assignment Overview
 
 ## Epigenetic Age Prediction from DNA Methylation
-
+ 
 ## Ιntroduction
 Understanding human aging can result in multiple implications while measuring it based on molecular profiles. These range across several fields, such as disease prevention and treatment, forensics, and the improvement of life expectancy and quality of life. Chronological age, additionally, has been linked to changes in DNA methylation, which refers to the addition of methyl groups to cytosine bases at CpG dinucleotides, that change systematically with age across the human genome.          
 Regarding methylome, it can be measured using microarray technologies and used to train regression models that predict chronological age from DNA methylation profiles. These models are known as epigenetic clocks and have broad applications in biology and medicine, such as estimating biological aging, detecting accelerated aging in disease, and studying the mechanisms of lifespan.        
