@@ -3,13 +3,14 @@
 ## Epigenetic Age Prediction from DNA Methylation
 
 ## Ιntroduction
-Understanding human aging can result in multiple implications while measuring it from molecular profiles. Its implications vary in many fields, such as disease prevention and treatment, forensics, amelioration of living expectancy and extension of life. Chronological age, additionally has been linked to changes in DNA methylation, meaning the addition of methyl groups to cytosine bases at CpG dinucleotides, which changes systematically with age across the human genome. However, the methylome has not yet been used to measure and compare human aging rates, but its signal can be signal can be measured with microarray technology and used to train regression models that predict chronological age from methylation profiles. Such models are called epigenetic clocks, and have broad applications in biology and medicine: measuring biological ageing rate, identifying accelerated ageing in disease, and understanding the epigenetic basis of lifespan.   
-Therefore, in this assignment, a complete machine learning pipeline for epigenetic age prediction from DNA methylation data was created, to better understand how the methylome ages and to determine whether human aging rates can be quantified and compared.   
-The assignment is separated into 4 different implementation steps:     
-`a) the dataset and preprocessing infrastructure establishment`,       
-`b) which is fed into different baseline models to predict age from DNA data by,`      
-`c)  feature selection in which by using the model with better results in RMSE, MAE, R², and Pearson r with 95% confidence intervals (CI) and does not over or underfit of the previous steps and then`       
-`d), by using the selected feature set from the previous step, the final tuning and evaluation of the model of use occurs.`   
+Understanding human aging can result in multiple implications while measuring it based on molecular profiles. These range across several fields, such as disease prevention and treatment, forensics, and the improvement of life expectancy and quality of life. Chronological age, additionally, has been linked to changes in DNA methylation, which refers to the addition of methyl groups to cytosine bases at CpG dinucleotides, that change systematically with age across the human genome.     
+Regarding methylome, it can be measured using microarray technologies and used to train regression models that predict chronological age from DNA methylation profiles. These models are known as epigenetic clocks and have broad applications in biology and medicine, such as estimating biological aging, detecting accelerated aging in disease, and studying the mechanisms of lifespan.
+In this assignment, a complete machine learning pipeline for epigenetic age prediction from DNA methylation data was developed, with the aim of better understanding how the methylome changes with age and whether human aging rates can be quantified and compared.
+The assignment is separated into 4 main different implementation steps:
+`a) the preparation of the dataset and preprocessing pipeline,`
+`b) the training of baseline models to predict age from DNA methylation data,`
+`c) feature selection based on model performance (RMSE, MAE, R², and Pearson r with 95% confidence intervals) while ensuring no overfitting or underfitting,` and
+`d) the final tuning and evaluation of the selected model using the optimal feature set.`
 
 ---
 
