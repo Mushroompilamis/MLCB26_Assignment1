@@ -8,7 +8,7 @@ Therefore, in this assignment, a complete machine learning pipeline for epigenet
 The assignment is separated into 4 different implementation steps:     
 `a) the dataset and preprocessing infrastructure establishment`,       
 `b) which is fed into different baseline models to predict age from DNA data by,`      
-`c)  feature selection in which by using the model with better results in RMSE, MAE, R², and Pearson r with 95% confidence     intervals (CI) and does not over or underfit of the previous steps and then`       
+`c)  feature selection in which by using the model with better results in RMSE, MAE, R², and Pearson r with 95% confidence intervals (CI) and does not over or underfit of the previous steps and then`       
 `d), by using the selected feature set from the previous step, the final tuning and evaluation of the model of use occurs.`   
 
 ## Dataset before pre-processing
