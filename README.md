@@ -9,16 +9,12 @@
 Source You will work with GSE40279 (Hannum et al., 2013), a publicly available dataset measuring whole-blood DNA methylation using the Illumina 450K microarray. The original dataset comprises 656 samples from individuals aged 19–101 years. The 450K array measures beta values — the proportion of methylated reads at each CpG site, ranging from 0 (fully unmethylated) to 1 (fully methylated) — at approximately 480,000 CpG positions.
 
 ## The Dataset after pre-processing
-
-### Files Samples Purpose
+---
+| Files   | Samples | Purpose | 
+| ----- | :---: | :---: | 
 | development_data .csv |  456 | Used in preprocessing, feature selection, training, cross-validation tuning. |
 | evaluation_data. csv | 100  |  Final evaluation. |
-
-| Task  | Status | Date Added (DD/MM/YYYY) | Date Completed (DD/MM/YYYY) | Assigned to |
-| ----- | :---: | :---: | :---: | :---: |
-| Initialization of the game| ✅ | 13/9/2025 | - | <img src="./logos/contribution signature.png" width=50px><br>PointBlanck |
-| Main Character Design | ❌ | 14/9/2025 | - | Megumi (Contribution Signature: TBD) |
-| ... | ... | ... | ... | ... |
+| ... | ... | ... | 
 
 ## Structure of repository
 
