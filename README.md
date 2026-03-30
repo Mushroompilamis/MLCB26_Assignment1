@@ -27,9 +27,9 @@ notebooks/ — Jupyter notebook (Testing the results of the functions. Justifica
 
 numpy, pandas, scikit-learn, scipy, mrmr-selection, optuna, matplotlib
 
-##Selected model
+## Selected model
 
-###Assignment Tasks Completed
+### Assignment Tasks Completed
 | Task 1  | ✓ |
 | Task 2  | ✓ |
 | Task 3  | ✓ |
