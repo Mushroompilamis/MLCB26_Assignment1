@@ -13,16 +13,21 @@ The assignment is separated into 4 different implementation steps:
 
 ## Dataset before pre-processing
 
-΅Working with GSE40279 (Hannum et al., 2013), a publicly available dataset measuring whole-blood DNA methylation using the Illumina 450K microarray. The original dataset comprises 656 samples from individuals aged 19–101 years. The 450K array measures beta values — the proportion of methylated reads at each CpG site, ranging from 0 (fully unmethylated) to 1 (fully methylated) — at approximately 480,000 CpG positions.
+The `GSE40279` (Hannum et al., 2013), a publicly available dataset of whole-blood DNA methylation profiles measured using the Illumina 450K microarray, was used.                                          Dataset  -->  `656 samples` from individuals aged `19–101 years`, with total features (positions) an approximation of `480,000 CpG positions`.
+Each `CpG` site --> Represented by a beta value `(range 0-1)`, indicatin if having full or no methylation. 
 
-## Dataset after pre-processing
+## Dataset (After Preprocessing)
 | **Files**   | **Samples** | **Purpose** | 
 | ----- | :---: | :---: | 
-| development_data .csv |  456 | Used in preprocessing, feature selection, training, cross-validation tuning. |
-| evaluation_data. csv | 100  |  Final evaluation. |
+| development_data .csv |  456 | Training, preprocessing, feature selection, cross-validation |
+| evaluation_data. csv | 100  |  Final evaluation |
 
-### Structure of data
-a) Each row is a sample (labelled by GEO sample ID). Each column is either a CpG feature  (named cgXXXXXXXX), an age column (integer years, the regression target), a sex column  (F/M), or an ethnicity column. The 1000 CpG features included in the datasets were selected from the full 480K array by absolute Spearman correlation with age across all samples.   
+### Data Structure
+<ul>
+<li>Each row represents a sample (GEO ID)./<li> 
+<li>Columns:/<li>
+  <li>
+Each column is either a CpG feature  (named cgXXXXXXXX), an age column (integer years, the regression target), a sex column  (F/M), or an ethnicity column. The 1000 CpG features included in the datasets were selected from the full 480K array by absolute Spearman correlation with age across all samples.   
 b) To simulate real-world data quality, some of the CpG values have been randomly set to NaN.
 
 ## Structure of repository
@@ -36,6 +41,7 @@ b) To simulate real-world data quality, some of the CpG values have been randoml
 </ul>
 
 
+
 ## Libraries of use
 
 ```
@@ -44,7 +50,6 @@ pandas,
 scikit-learn,
 scipy,
 mrmr-selection,
-optuna,
 matplotlib,
 pickle
 ```
