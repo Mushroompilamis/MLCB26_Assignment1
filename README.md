@@ -44,7 +44,7 @@ matplotlib
 [✓]  Task 1  
 [✓] Task 2  
 [✓] Task 3  
-[ ] Task 4  
-[ ] Bonus A 
-[ ] Bonus B  
+[✓] Task 4  
+[X] Bonus A 
+[X] Bonus B  
 
