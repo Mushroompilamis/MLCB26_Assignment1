@@ -1,22 +1,22 @@
 # Assignment Overview
 
-##Epigenetic Age Prediction from DNA Methylation
+## Epigenetic Age Prediction from DNA Methylation
 ---
 ## Here introduction
---
+---
 ## The Dataset before pre-processing
---
+---
 Source You will work with GSE40279 (Hannum et al., 2013), a publicly available dataset measuring whole-blood DNA methylation using the Illumina 450K microarray. The original dataset comprises 656 samples from individuals aged 19–101 years. The 450K array measures beta values — the proportion of methylated reads at each CpG site, ranging from 0 (fully unmethylated) to 1 (fully methylated) — at approximately 480,000 CpG positions.
 
 ## The Dataset after pre-processing
---
+---
 ### Files Samples Purpose
 | development_data .csv |  456 | Used in preprocessing, feature selection, training, cross-validation tuning. |
 | evaluation_data. csv | 100  |  Final evaluation. |
 
 
 ## Structure of repository
---
+---
 src/ —functions.py (Total functions of use)
 notebooks/ — Jupyter notebook (Testing the results of the functions. Justification and Discussion of the Results)
  data/ — dataset files (.gitignore for data commitment)
@@ -24,7 +24,7 @@ notebooks/ — Jupyter notebook (Testing the results of the functions. Justifica
  figures/ — generated plots (Saving the plots generated in Jupyter notebook)
 
 ## Libraries of use
---
+---
 numpy, pandas, scikit-learn, scipy, mrmr-selection, optuna, matplotlib
 
 ##Selected model
