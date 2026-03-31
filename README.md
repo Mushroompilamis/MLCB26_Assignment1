@@ -19,7 +19,7 @@ The assignment is separated into 4 main different implementation steps:
 The `GSE40279` (Hannum et al., 2013), a publicly available dataset of whole-blood DNA methylation profiles measured using the Illumina 450K microarray, was used.       
 
 Dataset  -->  `656 samples` from individuals aged `19–101 years`, with total features (positions) an approximation of `480,000 CpG positions`.        
-Each `CpG` site --> Represented by a beta value `(range 0-1)`, indicatin if having full or no methylation.      
+Each `CpG` site --> Represented by a beta value `(range 0-1)`, indicating if having full or no methylation.      
 
 ## Dataset (After Preprocessing)
 | **Files**   | **Samples** | **Purpose** | 
@@ -36,7 +36,7 @@ b) Columns include:
   ▻`ethnicity` (categorical)  
 
 #### Data Construction
-From the original ~480K CpGs, the 1000 CpG positions were selected by absolutre Spearman correlation with age across the dataset.
+From the original ~480K CpGs, the 1000 CpG positions were selected by absolute Spearman correlation with age across the dataset.
 
 #### Missing Values
 To stimulate real world conditions, some CpG values were randomly set to NaN.
@@ -46,10 +46,10 @@ To stimulate real world conditions, some CpG values were randomly set to NaN.
 ## Structure of repository
 <ul>
 <li> src/ —functions.py (All pipeline functions) </li>
-<li>notebooks/ — Jupyter notebook (data_exploration.ipynb with all the Tasks execution)</li>
+<li>notebooks/ — Jupyter notebook (data_exploration.ipynb and model_analysis.ipynb (final) with all the Tasks execution)</li>
 <li>data/ — dataset files (.gitignore for data commitment)</li>
 <li>models/ — saved best model (best_model.okl)</li>
-<li>figures/ — generated plots (Savied plots that were generated from data_exploration.ipynb)</li>
+<li>figures/ — generated plots (Saved plots that were generated from data_exploration.ipynb)</li>
 </ul>
 
 ---

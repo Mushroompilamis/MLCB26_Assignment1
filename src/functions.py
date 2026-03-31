@@ -67,28 +67,15 @@ def split_data(dev_data, eval_data):
     return train_data,val_data, eval_data
 
 #######################################################################################
-# Checking the missing values in the data
-def check_missing_values(data):
-    #Total missing values of data
-    total_missing_values=data.isna().sum().sum()
-    print("Total missing:",total_missing_values)
-    #highlighting columns with most missing data
-    miss_per_col= data.isna().sum()
-    miss_per_col=miss_per_col[miss_per_col>0]
-    sorted_miss= miss_per_col.sort_values(ascending=False)
-    print("\nTop five missing:", sorted_miss.head(5))
-
-#######################################################################################
 # Feature Scaring & Categorical Features process setting
-def feature_gather(data):
+def feature_gathering(data):
     metadata=[i for i in["sex","ethnicity"]if i in data.columns]
     cpg=[i for i in data.columns if i.startswith("cg")]
     age="age"
     return metadata,cpg,age
 
 def feature_set(data,sets="all"):
-    metadata = [i for i in ["sex", "ethnicity"] if i in data.columns]
-    cpg = [i for i in data.columns if i.startswith("cg")]
+    metadata,cpg, _= feature_gathering(data)
     if sets=="metadata":
         return metadata
     elif sets=="cpg":
@@ -103,12 +90,15 @@ def split_feature(data,features,age="age"):
     y=data[age].copy()
     return X,y
 
+#######################################################################################
 #Building the processor that will be applied across all splits
 #fit on training
 #Application on val and later on eval
+#Filling the missing values with median
 def  preprocessor_pipeline(cpg,metadata):
     transformers = []
     if len(cpg)>0:
+        #Feature scaling: StandardScaler to CpG features inside a sklearn Pipeline
         cpq_pipeline=Pipeline([
             ("imputer", SimpleImputer(strategy="median")),
             ("scaler", StandardScaler())
@@ -116,31 +106,112 @@ def  preprocessor_pipeline(cpg,metadata):
         transformers.append(("cpg",cpq_pipeline,cpg))
 
     if len(metadata)>0:
+        #Categorical features: Metadata columns are categorical , use of encoding for numerical representation
          metadata_pipeline=Pipeline([
              ("imputer", SimpleImputer(strategy="most_frequent")),
-             ("encoder", OneHotEncoder(handle_unknown="ignore"))
+             ("encoder", OneHotEncoder(handle_unknown="ignore",sparse_output=False))
          ])
          transformers.append(("metadata",metadata_pipeline,metadata))
 
+    if len(transformers) == 0:
+        raise ValueError("No valid feature found")
+
     preprocessor=ColumnTransformer(transformers=transformers)
     return preprocessor
+#######################################################################################
+# By one and all feature matrix
+def feature_matrices(train_data, val_data, eval_data):
+    # Taking the features from previous function
+    metadata_features, cpg_features, target = feature_gathering(train_data)
+    all_features = metadata_features + cpg_features
+
+    feature_groups = {"metadata": metadata_features, "cpg": cpg_features, "all": all_features }
+    results = {}
+    summary_rows = []
+
+    for char, features in feature_groups.items():
+        if len(features) == 0:
+            print(f"Skipping {char}: no features found.")
+            continue
+
+        X_train, y_train = split_feature(train_data, features, age=target)
+        X_val, y_val = split_feature(val_data, features, age=target)
+        X_eval, y_eval = split_feature(eval_data, features, age=target)
+
+       # Preprocessor for each possible group build
+        if char == "metadata":
+            preprocessor = preprocessor_pipeline(cpg=[], metadata=features)
+        elif char == "cpg":
+            preprocessor = preprocessor_pipeline(cpg=features, metadata=[])
+        else:
+            preprocessor = preprocessor_pipeline(cpg=cpg_features, metadata=metadata_features)
+
+        # Fit on train only
+        train_processed = preprocessor.fit_transform(X_train)
+        val_processed = preprocessor.transform(X_val)
+        eval_processed = preprocessor.transform(X_eval)
+
+        # Store everything
+        results[char] = { "features": features,
+            "X_train": X_train, "y_train": y_train,
+            "X_val": X_val, "y_val": y_val,
+            "X_eval": X_eval, "y_eval": y_eval,
+            "X_train_processed": train_processed, "X_val_processed": val_processed, "X_eval_processed": eval_processed,
+            "preprocessor": preprocessor
+        }
+
+        # Summary row
+        summary_rows.append({
+            "feature_set": char,
+            "train": X_train.shape,
+            "train_processed": train_processed.shape,
+            "val": X_val.shape,
+            "val_processed": val_processed.shape,
+            "evaluation": X_eval.shape,
+            "evaluation_processed": eval_processed.shape
+        })
+
+    summary_df = pd.DataFrame(summary_rows)
+    return results, summary_df
+
+#######################################################################################
 ###############################
 #1.3 Exploratory analysis
-# Creating the dataset summary function
-def data_summary(data,name):
-    summary={"dataset":name,
-             "samples": len(data),
-             "age_mean":round(data["age"].mean(),2),
-             "age_std":round(data["age"].std(),2),
-             "age_min":data["age"].min(),
-             "age_max":data["age"].max(),
-             "sex_balance": data["sex"].value_counts().to_dict() if "sex" in data.columns else {},
-             "ethnicity_balance":data["ethnicity"].value_counts().to_dict() if "ethnicity" in data.columns else {},
-             "cpg_info": len([i for i in data.columns if i.startswith("cg")]) ,
-             "total_missing_values": int(data.isna().sum().sum())
-             }
-    return summary
+# Creating the dataset summary function with addition information and checking of missing values
+def data_summary(train_data, val_data, eval_data, results=None, features="all"):
+    rows = []
 
+    processed_map = {}
+    processed_missing_map = {}
+
+    if results is not None and features in results:
+        processed_map = {
+            "Train": results[features]["X_train_processed"].shape,
+            "Validation": results[features]["X_val_processed"].shape,
+            "Evaluation": results[features]["X_eval_processed"].shape
+        }
+
+        processed_missing_map = {
+            "Train": pd.DataFrame(results[features]["X_train_processed"]).isna().sum().sum(),
+            "Validation": pd.DataFrame(results[features]["X_val_processed"]).isna().sum().sum(),
+            "Evaluation": pd.DataFrame(results[features]["X_eval_processed"]).isna().sum().sum()
+        }
+
+    for name, data in [("Train", train_data), ("Validation", val_data), ("Evaluation", eval_data)]:
+        rows.append({
+            "dataset": name,
+            "samples": len(data),
+            "age_mean ± std": f"{data['age'].mean():.1f} ± {data['age'].std():.1f}",
+            "age_range": f"{data['age'].min():.0f} - {data['age'].max():.0f}",
+            "sex_balance": data["sex"].value_counts().to_dict() if "sex" in data.columns else {},
+            "ethnicity_balance": data["ethnicity"].value_counts().to_dict() if "ethnicity" in data.columns else {},
+            "total_missing_values_raw": int(data.isna().sum().sum()),
+            "processed_shape": processed_map.get(name, None),
+            "total_missing_values_processed": processed_missing_map.get(name, None)
+        })
+    return pd.DataFrame(rows)
+
+#######################################################################################
 #Age distribution plot
 def age_distribution_plot(age):
     plt.figure(figsize=(10,5))
@@ -152,26 +223,10 @@ def age_distribution_plot(age):
     plt.show()
     plt.close()
 
-# Total statistics table
-def stats_table(train, val, evaluation):
-    rows = []
-    for name, data in [("Train", train), ("Validation", val), ("Evaluation", evaluation)]:
-        rows.append({
-            "split": name,
-            "n_samples": len(data),
-            "age_mean ± std": f"{data['age'].mean():.1f} ± {data['age'].std():.1f}",
-            "age_range": f"{data['age'].min():.0f} - {data['age'].max():.0f}",
-            "Male": int((data["sex"] == "M").sum()) if "sex" in data.columns else 0,
-            "Female": int((data["sex"] == "F").sum()) if "sex" in data.columns else 0
-        })
-
-    stats_tab = pd.DataFrame(rows)
-    return stats_tab
-
 #Checking distribution per split
-def age_split_plot(train, val, evaluation):
+def age_split_plot(train_data, val_data, eval_data):
     fig, axes = plt.subplots(1, 3, figsize=(15, 4))
-    for ax, (name, data) in zip(axes, [("Train", train), ("Validation", val), ("Evaluation", evaluation)]):
+    for ax, (name, data) in zip(axes, [("Train", train_data), ("Validation", val_data), ("Evaluation", eval_data)]):
         ax.hist(data["age"], bins=20, color="blue", edgecolor="black")
         ax.set_title(name)
         ax.set_xlabel("Age")
@@ -181,55 +236,59 @@ def age_split_plot(train, val, evaluation):
     plt.show()
     plt.close()
 
+#######################################################################################
 ###########TASK 2###########
 # 2.1  OLS LinearRegression across feature sets
 
 #OlS Linear Regression for the train_data
 
-def ols_model(X_train, y_train,X_val):
+def ols_model(X_train,y_train,X_val):
     model=LinearRegression()
     model.fit(X_train, y_train)
     y_predict=model.predict(X_val)
     return model,y_predict
+#######################################################################################
 
-def evaluation_of_model (y_true,y_predict,n_bootstrap=100,seed=42):
-    print("Evaluation of the model by using bootstrap")
+#Evaluation function run to each model separately on the validation set using bootstrap resampling of the validation set(1000 resamples, seed=42)
+def evaluation_of_model(y_true, y_predict, n_bootstrap=1000, seed=42):
     rng = np.random.RandomState(seed)
-    y_true=np.array(y_true)
-    y_predict=np.array(y_predict)
+    y_true = np.array(y_true)
+    y_predict = np.array(y_predict)
 
-#RMSE, MAE, R², and Pearson r
-    rmse_scores=[]
-    mae_scores=[]
-    r2_scores=[]
-    pearson_corr_scores=[]
+    # RMSE, MAE, R², and Pearson r
+    rmse_scores = []
+    mae_scores = []
+    r2_scores = []
+    pearson_corr_scores = []
     indices = np.arange(len(y_true))
 
     for _ in range(n_bootstrap):
-        sample_idx=rng.choice(indices, size=len(indices), replace=True)
-        y_true_sample=y_true[sample_idx]
-        y_pred_sample=y_predict[sample_idx]
-        rmse=np.sqrt(mean_squared_error(y_true_sample, y_pred_sample))
-        mae=mean_absolute_error(y_true_sample, y_pred_sample)
-        r2=r2_score(y_true_sample, y_pred_sample)
-        r, _=pearsonr(y_true_sample, y_pred_sample)
+        sample_idx = rng.choice(indices, size=len(indices), replace=True)
+        y_true_sample = y_true[sample_idx]
+        y_pred_sample = y_predict[sample_idx]
+
+        rmse = np.sqrt(mean_squared_error(y_true_sample, y_pred_sample))
+        mae = mean_absolute_error(y_true_sample, y_pred_sample)
+        r2 = r2_score(y_true_sample, y_pred_sample)
+        r, _ = pearsonr(y_true_sample, y_pred_sample)
+
         rmse_scores.append(rmse)
         mae_scores.append(mae)
         r2_scores.append(r2)
         pearson_corr_scores.append(r)
 
-    rmse_scores=np.array(rmse_scores)
-    mae_scores=np.array(mae_scores)
-    r2_scores=np.array(r2_scores)
-    pearson_corr_scores=np.array(pearson_corr_scores)
+    rmse_scores = np.array(rmse_scores)
+    mae_scores = np.array(mae_scores)
+    r2_scores = np.array(r2_scores)
+    pearson_corr_scores = np.array(pearson_corr_scores)
 
-    full_rmse=np.sqrt(mean_squared_error(y_true, y_predict))
-    full_mae=mean_absolute_error(y_true, y_predict)
-    full_r2=r2_score(y_true, y_predict)
-    full_r, _=pearsonr(y_true, y_predict)
+    full_rmse = np.sqrt(mean_squared_error(y_true, y_predict))
+    full_mae = mean_absolute_error(y_true, y_predict)
+    full_r2 = r2_score(y_true, y_predict)
+    full_r, _ = pearsonr(y_true, y_predict)
 
-#Addind and with 95% confidence intervals (CI).
-    final_results= {
+    # Addind and with 95% confidence intervals (CI).
+    final_results = {
         "rmse_mean": rmse_scores.mean(),
         "rmse_std": rmse_scores.std(ddof=1),
         "rmse_ci": np.percentile(rmse_scores, [2.5, 97.5]),
@@ -240,7 +299,6 @@ def evaluation_of_model (y_true,y_predict,n_bootstrap=100,seed=42):
         "mae_std": mae_scores.std(ddof=1),
         "mae_ci": np.percentile(mae_scores, [2.5, 97.5]),
         "mae_full": full_mae,
-        "mae_scores": mae_scores,
 
         "r2_mean": r2_scores.mean(),
         "r2_std": r2_scores.std(ddof=1),
@@ -252,96 +310,148 @@ def evaluation_of_model (y_true,y_predict,n_bootstrap=100,seed=42):
         "pearson_std": pearson_corr_scores.std(ddof=1),
         "pearson_ci": np.percentile(pearson_corr_scores, [2.5, 97.5]),
         "pearson_full": full_r,
-        "pearson_scores":pearson_corr_scores
     }
-
-    print("Validation metrics and 95% CI:")
-    print(f"RMSE: {full_rmse:.4f} (95% CI: {final_results['rmse_ci'][0]:.4f} - {final_results['rmse_ci'][1]:.4f})")
-    print(f"MAE: {full_mae:.4f} (95% CI: {final_results['mae_ci'][0]:.4f} - {final_results['mae_ci'][1]:.4f})")
-    print(f"R^2: {full_r2:.4f} (95% CI: {final_results['r2_ci'][0]:.4f} - {final_results['r2_ci'][1]:.4f})")
-    print(f"Pearson r: {full_r:.4f} (95% CI: {final_results['pearson_ci'][0]:.4f} - {final_results['pearson_ci'][1]:.4f})")
+    print("Evaluation completed")
     return final_results
 
+# Train OLS LinearRegression model per feature set
+def ols_all_featuresets(results, n_bootstrap=1000, seed=42):
+    output = {}
+    summary_rows = []
+
+    for featureset in ["metadata", "cpg", "all"]:
+        if featureset not in results:
+            continue
+
+        X_train = results[featureset]["X_train_processed"]
+        X_val = results[featureset]["X_val_processed"]
+        y_train = results[featureset]["y_train"]
+        y_val = results[featureset]["y_val"]
+
+        model, y_pred = ols_model(X_train, y_train, X_val)
+        metrics = evaluation_of_model(y_val, y_pred, n_bootstrap=n_bootstrap, seed=seed)
+
+        output[featureset] = {
+            "model": model,
+            "y_pred": y_pred,
+            "metrics": metrics
+        }
+
+        summary_rows.append({
+            "feature_set": featureset,
+            "RMSE": round(metrics["rmse_full"], 4),
+            "RMSE_95CI": f"{metrics['rmse_ci'][0]:.4f} - {metrics['rmse_ci'][1]:.4f}",
+            "MAE": round(metrics["mae_full"], 4),
+            "MAE_95CI": f"{metrics['mae_ci'][0]:.4f} - {metrics['mae_ci'][1]:.4f}",
+            "R2": round(metrics["r2_full"], 4),
+            "R2_95CI": f"{metrics['r2_ci'][0]:.4f} - {metrics['r2_ci'][1]:.4f}",
+            "Pearson_r": round(metrics["pearson_full"], 4),
+            "Pearson_95CI": f"{metrics['pearson_ci'][0]:.4f} - {metrics['pearson_ci'][1]:.4f}",
+        })
+        print(f"Train OLS LinearRegression for {featureset}")
+    summary_df = pd.DataFrame(summary_rows)
+    return output, summary_df
+
+#######################################################################################
 ###########################################
 #2.2  Three regression models at default hyperparameters
 
 #MODELS with default parameters
 
 #ElasticNet — L1+L2 regularised linear regression
-def model_elasticnet(X_train,y_train,X_val):
-    print("################Training of ElasticNet###############")
+def model_elasticnet(X_train, y_train, X_val):
+    print("############### Training ElasticNet ###############")
     model = ElasticNet()
     model.fit(X_train, y_train)
     y_predict = model.predict(X_val)
     return model, y_predict
 
-#SVR — Support Vector Regression with RBF kernel
-def svr_model(X_train,y_train,X_val):
-    print("###############Training of SVR###############")
+# SVR — Support Vector Regression with RBF kernel
+def svr_model(X_train, y_train, X_val):
+    print("############### Training SVR ###############")
     model = SVR(kernel="rbf")
     model.fit(X_train, y_train)
     y_predict = model.predict(X_val)
     return model, y_predict
 
-#BayesianRidge — Bayesian linear regression with automatic relevance determination
+# BayesianRidge — Bayesian linear regression
 def bayesianridge_model(X_train, y_train, X_val):
-    print("###############Training of BayesianRidge model###############")
+    print("############### Training BayesianRidge ###############")
     model = BayesianRidge()
     model.fit(X_train, y_train)
     y_predict = model.predict(X_val)
     return model, y_predict
 
-#Derivables
-#report_table
+
 def report_table(results):
     rows = []
     for name, res in results.items():
         rows.append({
             "Model": name,
-            "RMSE (mean ± CI)": f"{res['rmse_mean']:.4f} ({res['rmse_ci'][0]:.4f} - {res['rmse_ci'][1]:.4f})",
-            "MAE": f"{res['mae_mean']:.4f}",
-            "R^2": f"{res['r2_mean']:.4f}",
-            "Pearson r": f"{res['pearson_mean']:.4f}"
+            "RMSE mean": f"{res['rmse_mean']:.4f}",
+            "RMSE 95% CI": f"{res['rmse_ci'][0]:.4f} - {res['rmse_ci'][1]:.4f}",
+            "MAE mean": f"{res['mae_mean']:.4f}",
+            "MAE 95% CI": f"{res['mae_ci'][0]:.4f} - {res['mae_ci'][1]:.4f}",
+            "R^2 mean": f"{res['r2_mean']:.4f}",
+            "R^2 95% CI": f"{res['r2_ci'][0]:.4f} - {res['r2_ci'][1]:.4f}",
+            "Pearson r mean": f"{res['pearson_mean']:.4f}",
+            "Pearson r 95% CI": f"{res['pearson_ci'][0]:.4f} - {res['pearson_ci'][1]:.4f}"
         })
 
     df = pd.DataFrame(rows)
-    print("Report table of Model Performance:")
+    print("Report table of model performance:")
     print(df.to_string(index=False))
     return df
 
 
-#Boxplots
-def bootstrap_boxplots(results,path="../figures/bootstrap_boxplots_rmse_r2.png"):
-    mname = list(results.keys())
-    # Extract bootstrap distributions
-    rmse_data = [results[m]["rmse_scores"] for m in mname]
-    r2_data   = [results[m]["r2_scores"] for m in mname]
+def bootstrap_boxplots(results, path="../figures/bootstrap_boxplots_rmse_r2.png"):
+    os.makedirs("../figures", exist_ok=True)
+
+    model_names = list(results.keys())
+    rmse_data = [results[m]["rmse_scores"] for m in model_names]
+    r2_data = [results[m]["r2_scores"] for m in model_names]
+
     fig, axes = plt.subplots(1, 2, figsize=(14, 6))
 
-    #For RMSE
     axes[0].boxplot(rmse_data, patch_artist=True)
-    axes[0].set_title("Bootstrap RMSE Distribution", fontsize=12)
-    axes[0].set_ylabel("RMSE in years")
+    axes[0].set_title("Bootstrap RMSE Distribution")
+    axes[0].set_ylabel("RMSE")
     axes[0].set_xlabel("Model")
-    axes[0].set_xticks(range(1, len(mname) + 1))
-    axes[0].set_xticklabels(mname, rotation=20)
+    axes[0].set_xticks(range(1, len(model_names) + 1))
+    axes[0].set_xticklabels(model_names, rotation=20)
 
-    # For R^2
     axes[1].boxplot(r2_data, patch_artist=True)
-    axes[1].set_title("Bootstrap R^2 Distribution", fontsize=12)
-    axes[1].set_ylabel("R^2")
+    axes[1].set_title("Bootstrap R² Distribution")
+    axes[1].set_ylabel("R²")
     axes[1].set_xlabel("Model")
-    axes[1].set_xticks(range(1, len(mname) + 1))
-    axes[1].set_xticklabels(mname, rotation=20)
+    axes[1].set_xticks(range(1, len(model_names) + 1))
+    axes[1].set_xticklabels(model_names, rotation=20)
 
     plt.tight_layout()
-    plt.savefig(path, dpi=300, bbox_inches='tight')
+    plt.savefig(path, dpi=300, bbox_inches="tight")
     plt.show()
     plt.close()
 
+#Comparison
+def compare_with_ols(model_results, ols_results):
+    rows = []
+    ols_rmse = ols_results["rmse_full"]
+    ols_r2 = ols_results["r2_full"]
+
+    for name, res in model_results.items():
+        beats_ols = (res["rmse_full"] < ols_rmse) and (res["r2_full"] > ols_r2)
+        rows.append({
+            "Model": name,
+            "RMSE": round(res["rmse_full"], 4),
+            "R²": round(res["r2_full"], 4),
+            "Beats OLS ": beats_ols
+        })
+
+    return pd.DataFrame(rows)
+
 #Checking for overfitting
 def train_vs_val_all_models(models, X_train, y_train, X_val, y_val):
-    results = []
+    rows = []
     for name, model in models.items():
         train_pred = model.predict(X_train)
         val_pred = model.predict(X_val)
@@ -349,7 +459,7 @@ def train_vs_val_all_models(models, X_train, y_train, X_val, y_val):
         val_rmse = np.sqrt(mean_squared_error(y_val, val_pred))
         train_r2 = r2_score(y_train, train_pred)
         val_r2 = r2_score(y_val, val_pred)
-        results.append({
+        rows.append({
             "Model": name,
             "Train RMSE": train_rmse,
             "Val RMSE": val_rmse,
@@ -357,8 +467,9 @@ def train_vs_val_all_models(models, X_train, y_train, X_val, y_val):
             "Val R^2": val_r2
         })
 
-    return pd.DataFrame(results)
+    return pd.DataFrame(rows)
 
+#######################################################################################
 ###########TASK 3###########
 #3.1  Stability Selection
 def stability_selection(X_train,resamples=50,samples_frac=0.80,top_k=200,seed=42):
