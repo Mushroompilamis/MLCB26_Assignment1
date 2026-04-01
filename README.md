@@ -57,13 +57,13 @@ To stimulate real world conditions, some CpG values were randomly set to NaN.
 ## Libraries of use
 
 ```
-numpy, pandas,scikit-learn,scipy,mrmr-selection,matplotlib,pickle
+numpy, pandas,scikit-learn,scipy,mrmr-selection,matplotlib,pickle, optuna
 ```
 
 ---
 
 ## Best Selected model
-Following hyperparameter tuning and final evaluation on the locked evaluation set, `ElasticNet` had the lowest bootstrap RMSE mean **(5.0549)** among the three tuned models (ElasticNet, SVR, BayesianRidge).   
+Following hyperparameter tuning and final evaluation on the locked evaluation set, `ElasticNet` had the lowest bootstrap RMSE mean **(5.0711)** among the three tuned models (ElasticNet, SVR, BayesianRidge).   
 
 *ElasticNet --> Selected as the final model*
 
