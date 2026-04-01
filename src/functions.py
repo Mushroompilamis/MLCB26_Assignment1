@@ -1,6 +1,5 @@
 #Libraries
 #######################################################################################
-import sys
 import os
 import pickle
 import numpy as np
@@ -21,6 +20,11 @@ from scipy.stats import spearmanr
 from scipy.stats import loguniform,uniform
 from mrmr import mrmr_regression
 import optuna
+from mrmr import mrmr_classif
+from sklearn.linear_model import LogisticRegression
+from sklearn.naive_bayes import GaussianNB
+from sklearn.metrics import (accuracy_score,f1_score,matthews_corrcoef,roc_auc_score,average_precision_score,confusion_matrix,roc_curve)
+
 
 #######################################################################################
 #######################################################################################
@@ -1022,4 +1026,474 @@ def plot_best_model_real_predict(y_true, y_predict, model_name, dir="../figures"
 
 #######################################################################################
 ###########BONUS A###########
+#Optuna Hyperparameter Optimization
+#Optuna Tune Model
+def optuna_tune_model(model_name, X_train, y_train, selected_features, n_trials=40, cv=5, seed=42):
 
+    X_train = X_train[selected_features].copy()
+    y_train = np.asarray(y_train)
+
+    cv_splitter = KFold(n_splits=cv, shuffle=True, random_state=seed)
+
+    def objective(trial):
+        if model_name == "ElasticNet":
+            alpha = trial.suggest_float("alpha", 0.001, 10, log=True)
+            l1_ratio = trial.suggest_float("l1_ratio", 0.1, 1.0)
+
+            model = ElasticNet(alpha=alpha, l1_ratio=l1_ratio, random_state=seed)
+
+        elif model_name == "SVR":
+            C = trial.suggest_float("C", 0.1, 500, log=True)
+            epsilon = trial.suggest_categorical("epsilon", [0.01, 0.1, 0.5, 1.0])
+            kernel = trial.suggest_categorical("kernel", ["rbf", "linear"])
+
+            model = SVR(C=C, epsilon=epsilon, kernel=kernel)
+
+        elif model_name == "BayesianRidge":
+            alpha_1 = trial.suggest_float("alpha_1", 1e-7, 1e-3, log=True)
+            alpha_2 = trial.suggest_float("alpha_2", 1e-7, 1e-3, log=True)
+            lambda_1 = trial.suggest_float("lambda_1", 1e-7, 1e-3, log=True)
+            lambda_2 = trial.suggest_float("lambda_2", 1e-7, 1e-3, log=True)
+
+            model = BayesianRidge(alpha_1=alpha_1, alpha_2=alpha_2, lambda_1=lambda_1,lambda_2=lambda_2)
+
+        else:
+            raise ValueError(f"Unsupported model_name: {model_name}")
+
+        pipeline = Pipeline([
+            ("preprocessor", preprocessor_pipeline(cpg=selected_features, metadata=[])),
+            ("model", model)
+        ])
+
+        scores = []
+        for train_idx, val_idx in cv_splitter.split(X_train, y_train):
+            X_tr = X_train.iloc[train_idx]
+            X_va = X_train.iloc[val_idx]
+            y_tr = y_train[train_idx]
+            y_va = y_train[val_idx]
+
+            pipeline.fit(X_tr, y_tr)
+            y_pred = pipeline.predict(X_va)
+            rmse = mean_squared_error(y_va, y_pred) ** 0.5
+            scores.append(rmse)
+
+        return float(np.mean(scores))
+
+    sampler = optuna.samplers.TPESampler(seed=seed)
+    study = optuna.create_study(direction="minimize", sampler=sampler)
+    study.optimize(objective, n_trials=n_trials, show_progress_bar=False)
+
+    best_params = study.best_params
+
+    if model_name == "ElasticNet":
+        best_model = ElasticNet(
+            alpha=best_params["alpha"],
+            l1_ratio=best_params["l1_ratio"],
+            random_state=seed
+        )
+
+    elif model_name == "SVR":
+        best_model = SVR(
+            C=best_params["C"],
+            epsilon=best_params["epsilon"],
+            kernel=best_params["kernel"]
+        )
+
+    elif model_name == "BayesianRidge":
+        best_model = BayesianRidge(
+            alpha_1=best_params["alpha_1"],
+            alpha_2=best_params["alpha_2"],
+            lambda_1=best_params["lambda_1"],
+            lambda_2=best_params["lambda_2"]
+        )
+
+    best_pipeline = Pipeline([
+        ("preprocessor", preprocessor_pipeline(cpg=selected_features, metadata=[])),
+        ("model", best_model)
+    ])
+
+    best_pipeline.fit(X_train, y_train)
+
+    return best_pipeline, study
+
+#######################################################################################
+#Tuning and for the 3 models
+def optuna_tune_all_models(dev_data, selected_features, n_trials=40, cv=5, seed=42):
+    X_dev = dev_data[selected_features].copy()
+    y_dev = dev_data["age"].values
+
+    best_models_optuna = {}
+    studies = {}
+    rows = []
+
+    for model_name in ["ElasticNet", "SVR", "BayesianRidge"]:
+        print(f"\nOptuna tuning: {model_name}")
+        best_pipeline, study = optuna_tune_model(
+            model_name=model_name,
+            X_train=X_dev,
+            y_train=y_dev,
+            selected_features=selected_features,
+            n_trials=n_trials,
+            cv=cv,
+            seed=seed
+        )
+
+        best_models_optuna[model_name] = best_pipeline
+        studies[model_name] = study
+
+        rows.append({
+            "Model": model_name,
+            "Best RMSE": study.best_value,
+            "Best Params": study.best_params,
+            "Trials": n_trials
+        })
+
+    optuna_results_df = pd.DataFrame(rows)
+    return best_models_optuna, optuna_results_df, studies
+
+#######################################################################################
+#Head to head function of RandomSearch vs Optuna
+def compare_randomsearch_vs_optuna(random_results_df, optuna_results_df):
+    random_map = dict(zip(random_results_df["Model"], random_results_df["Best RMSE"]))
+    optuna_map = dict(zip(optuna_results_df["Model"], optuna_results_df["Best RMSE"]))
+
+    rows = []
+    for model_name in ["ElasticNet", "SVR", "BayesianRidge"]:
+        random_rmse = float(random_map[model_name])
+        optuna_rmse = float(optuna_map[model_name])
+        delta = optuna_rmse - random_rmse
+
+        if optuna_rmse < random_rmse:
+            winner = "Optuna"
+        elif random_rmse < optuna_rmse:
+            winner = "RandomSearch"
+        else:
+            winner = "Tie"
+
+        rows.append({
+            "Model": model_name,
+            "RandomSearch RMSE": round(random_rmse, 4),
+            "Optuna RMSE": round(optuna_rmse, 4),
+            "Delta (Optuna - Random)": round(delta, 4),
+            "Winner": winner
+        })
+
+    comparison_df = pd.DataFrame(rows)
+    print(comparison_df.to_string(index=False))
+    return comparison_df
+
+#######################################################################################
+# Function for the figure that shows Optuna optimisation history (trial RMSE vs trial number) for one model
+def plot_optuna_history(study, model_name, path="../figures/optuna_history_elastincnet.png"):
+    os.makedirs("../figures", exist_ok=True)
+
+    trial_numbers = []
+    trial_values = []
+
+    for trial in study.trials:
+        if trial.value is not None:
+            trial_numbers.append(trial.number)
+            trial_values.append(trial.value)
+
+    plt.figure(figsize=(8, 5))
+    plt.axhline(study.best_value, color='yellow', linestyle='--', label=f'Best RMSE = {study.best_value:.4f}')
+    plt.plot(trial_numbers, trial_values, marker="o")
+    plt.xlabel("Trial Number")
+    plt.ylabel("CV RMSE")
+    plt.title(f"Optuna Optimization History - {model_name}")
+    plt.tight_layout()
+    plt.savefig(path, dpi=200, bbox_inches="tight")
+    plt.show()
+    plt.close()
+
+#######################################################################################
+#Bonus B: Sex Prediction from DNA Methylation
+
+def sex_label(train_data, val_data, eval_data):
+    train_data = train_data.copy()
+    val_data = val_data.copy()
+    eval_data = eval_data.copy()
+
+    train_data["sex_label"] = train_data["sex"].map({"F": 0, "M": 1})
+    val_data["sex_label"] = val_data["sex"].map({"F": 0, "M": 1})
+    eval_data["sex_label"] = eval_data["sex"].map({"F": 0, "M": 1})
+
+    print("Sex labels created: F=0, M=1")
+    return train_data, val_data, eval_data
+
+#######################################################################################
+def sex_features(train_data, k):
+    k = int(k)
+    cpg_cols = [i for i in train_data.columns if i.startswith("cg")]
+
+    imputer = SimpleImputer(strategy="median")
+    X_train_cpg = pd.DataFrame(
+        imputer.fit_transform(train_data[cpg_cols]),
+        columns=cpg_cols,
+        index=train_data.index
+    )
+
+    y_train = train_data["sex_label"]
+
+    print(f"Running mRMR classification --> K={k}")
+    sex_features = mrmr_classif(X=X_train_cpg, y=y_train, K=k)
+    print(f"Selected {len(sex_features)} sex-related CpG features")
+
+    return sex_features
+
+#######################################################################################
+def plot_sexvsage_overlap(age_features, sex_features, path="../figures/sex_age_overlap.png"):
+    os.makedirs("../figures", exist_ok=True)
+
+    age_set = set(age_features)
+    sex_set = set(sex_features)
+
+    overlap = age_set & sex_set
+    only_age = age_set - sex_set
+    only_sex = sex_set - age_set
+
+    print(f"Age: {len(only_age)}")
+    print(f"Overlap: {len(overlap)}")
+    print(f"Sex: {len(only_sex)}")
+
+    plt.figure(figsize=(6, 5))
+    plt.bar(["Age", "Overlap", "Sex"],[len(only_age), len(overlap), len(only_sex)],edgecolor="black")
+    plt.title("Overlap between age-selected & sex-selected CpGs")
+    plt.ylabel("Number of CpGs")
+    plt.xlabel("Feature group")
+    plt.tight_layout()
+    plt.savefig(path, dpi=150, bbox_inches="tight")
+    plt.show()
+    plt.close()
+
+#######################################################################################
+
+def prepare_sex_classification_data(train_data, eval_data, sex_features):
+    X_train = train_data[sex_features].copy()
+    X_eval = eval_data[sex_features].copy()
+
+    y_train = train_data["sex_label"].values
+    y_eval = eval_data["sex_label"].values
+
+    preprocessor = preprocessor_pipeline(cpg=sex_features, metadata=[])
+    X_train_processed = preprocessor.fit_transform(X_train)
+    X_eval_processed = preprocessor.transform(X_eval)
+
+    return X_train_processed, X_eval_processed, y_train, y_eval, preprocessor
+#######################################################################################
+def training_classifiers(X_train, y_train):
+    print("Training Logistic Regression")
+    lr = LogisticRegression(random_state=42)
+    lr.fit(X_train, y_train)
+
+    print("Training Gaussian Naive Bayes")
+    gnb = GaussianNB()
+    gnb.fit(X_train, y_train)
+
+    print("Classification models --> Trained ")
+    return lr, gnb
+#######################################################################################
+def evaluate_classifier(model, X_eval, y_eval, bootstrap=1000, seed=42):
+    rng = np.random.RandomState(seed)
+
+    acc_scores = []
+    f1_scores = []
+    mcc_scores = []
+    roc_scores = []
+    pr_scores = []
+
+    indices = np.arange(len(y_eval))
+
+    for _ in range(bootstrap):
+        sample_idx = rng.choice(indices, size=len(indices), replace=True)
+        X_sample = X_eval[sample_idx]
+        y_sample = y_eval[sample_idx]
+
+        y_pred = model.predict(X_sample)
+        y_prob = model.predict_proba(X_sample)[:, 1]
+
+        acc_scores.append(accuracy_score(y_sample, y_pred))
+        f1_scores.append(f1_score(y_sample, y_pred, zero_division=0))
+        mcc_scores.append(matthews_corrcoef(y_sample, y_pred))
+
+        if len(np.unique(y_sample)) < 2:
+            roc_scores.append(np.nan)
+            pr_scores.append(np.nan)
+        else:
+            roc_scores.append(roc_auc_score(y_sample, y_prob))
+            pr_scores.append(average_precision_score(y_sample, y_prob))
+
+    acc_scores = np.array(acc_scores)
+    f1_scores = np.array(f1_scores)
+    mcc_scores = np.array(mcc_scores)
+    roc_scores = np.array(roc_scores)
+    pr_scores = np.array(pr_scores)
+
+    y_pred_full = model.predict(X_eval)
+    y_prob_full = model.predict_proba(X_eval)[:, 1]
+
+    results = {
+        "accuracy_mean": np.nanmean(acc_scores),
+        "accuracy_std": np.nanstd(acc_scores, ddof=1),
+        "accuracy_ci": np.nanpercentile(acc_scores, [2.5, 97.5]),
+        "accuracy_full": accuracy_score(y_eval, y_pred_full),
+        "accuracy_scores": acc_scores,
+
+        "f1_mean": np.nanmean(f1_scores),
+        "f1_std": np.nanstd(f1_scores, ddof=1),
+        "f1_ci": np.nanpercentile(f1_scores, [2.5, 97.5]),
+        "f1_full": f1_score(y_eval, y_pred_full, zero_division=0),
+        "f1_scores": f1_scores,
+
+        "mcc_mean": np.nanmean(mcc_scores),
+        "mcc_std": np.nanstd(mcc_scores, ddof=1),
+        "mcc_ci": np.nanpercentile(mcc_scores, [2.5, 97.5]),
+        "mcc_full": matthews_corrcoef(y_eval, y_pred_full),
+        "mcc_scores": mcc_scores,
+
+        "roc_auc_mean": np.nanmean(roc_scores),
+        "roc_auc_std": np.nanstd(roc_scores, ddof=1),
+        "roc_auc_ci": np.nanpercentile(roc_scores, [2.5, 97.5]),
+        "roc_auc_full": roc_auc_score(y_eval, y_prob_full),
+        "roc_auc_scores": roc_scores,
+
+        "pr_auc_mean": np.nanmean(pr_scores),
+        "pr_auc_std": np.nanstd(pr_scores, ddof=1),
+        "pr_auc_ci": np.nanpercentile(pr_scores, [2.5, 97.5]),
+        "pr_auc_full": average_precision_score(y_eval, y_prob_full),
+        "pr_auc_scores": pr_scores
+    }
+
+    print("Completed")
+    print(f"Accuracy : {results['accuracy_full']:.4f} (95% CI: {results['accuracy_ci'][0]:.4f} - {results['accuracy_ci'][1]:.4f})")
+    print(f"F1       : {results['f1_full']:.4f} (95% CI: {results['f1_ci'][0]:.4f} - {results['f1_ci'][1]:.4f})")
+    print(f"MCC      : {results['mcc_full']:.4f} (95% CI: {results['mcc_ci'][0]:.4f} - {results['mcc_ci'][1]:.4f})")
+    print(f"ROC-AUC  : {results['roc_auc_full']:.4f} (95% CI: {results['roc_auc_ci'][0]:.4f} - {results['roc_auc_ci'][1]:.4f})")
+    print(f"PR-AUC   : {results['pr_auc_full']:.4f} (95% CI: {results['pr_auc_ci'][0]:.4f} - {results['pr_auc_ci'][1]:.4f})")
+
+    return results
+#######################################################################################
+def sex_classification_table(results_dict, features_label="mRMR-selected CpGs"):
+    rows = []
+
+    for model_name, res in results_dict.items():
+        rows.append({
+            "Model": model_name,
+            "Accuracy (95% CI)": f"{res['accuracy_mean']:.3f} [{res['accuracy_ci'][0]:.3f}, {res['accuracy_ci'][1]:.3f}]",
+            "F1 (95% CI)": f"{res['f1_mean']:.3f} [{res['f1_ci'][0]:.3f}, {res['f1_ci'][1]:.3f}]",
+            "MCC (95% CI)": f"{res['mcc_mean']:.3f} [{res['mcc_ci'][0]:.3f}, {res['mcc_ci'][1]:.3f}]",
+            "ROC-AUC (95% CI)": f"{res['roc_auc_mean']:.3f} [{res['roc_auc_ci'][0]:.3f}, {res['roc_auc_ci'][1]:.3f}]",
+            "PR-AUC (95% CI)": f"{res['pr_auc_mean']:.3f} [{res['pr_auc_ci'][0]:.3f}, {res['pr_auc_ci'][1]:.3f}]",
+            "Feature": features_label
+        })
+
+    df = pd.DataFrame(rows)
+    print(df.to_string(index=False))
+    return df
+#######################################################################################
+def plot_confusion_matrices(lr, gnb, X_eval, y_eval, path="../figures/confusion_matrices_sex.png"):
+    os.makedirs("../figures", exist_ok=True)
+
+    fig, axes = plt.subplots(1, 2, figsize=(12, 5))
+
+    for ax, model, name in zip(axes,[lr, gnb],["Logistic Regression", "Gaussian NB"]):
+        y_pred = model.predict(X_eval)
+        matrix = confusion_matrix(y_eval, y_pred, labels=[0, 1])
+
+        ax.imshow(matrix, cmap="Reds")
+        ax.set_xticks([0, 1])
+        ax.set_yticks([0, 1])
+        ax.set_xticklabels(["Pred F", "Pred M"])
+        ax.set_yticklabels(["Actual F", "Actual M"])
+        ax.set_title(f"Confusion Matrix - {name}")
+
+        for i in range(2):
+            for j in range(2):
+                ax.text(j, i, matrix[i, j],color="black", ha="center", va="center", fontsize=20,fontweight="bold")
+
+    plt.tight_layout()
+    plt.savefig(path, dpi=150, bbox_inches="tight")
+    plt.show()
+    plt.close()
+#######################################################################################
+def plot_roc_curves(lr, gnb, X_eval, y_eval, path="../figures/roc_curves_sex.png"):
+    os.makedirs("../figures", exist_ok=True)
+
+    plt.figure(figsize=(7, 6))
+
+    models = [lr, gnb]
+    names = ["Logistic Regression", "Gaussian NB"]
+
+    for model, name in zip(models, names):
+        y_prob = model.predict_proba(X_eval)[:, 1]
+        fpr, tpr, _ = roc_curve(y_eval, y_prob)
+        auc = roc_auc_score(y_eval, y_prob)
+        plt.plot(fpr, tpr, label=f"{name} (AUC = {auc:.3f})")
+
+    plt.plot([0, 1], [0, 1],color='red', linestyle="--", label="Random guess")
+    plt.xlabel("False Positive Rate")
+    plt.ylabel("True Positive Rate")
+    plt.title("ROC Curves - Sex Prediction")
+    plt.legend()
+    plt.tight_layout()
+    plt.savefig(path, dpi=150, bbox_inches="tight")
+    plt.show()
+    plt.close()
+    #######################################################################################
+def plot_top20_sex_cpgs(train_data, path="../figures/top20_sex_cpgs.png"):
+        os.makedirs("../figures", exist_ok=True)
+
+        cpg_cols = [i for i in train_data.columns if i.startswith("cg")]
+        y = train_data["sex_label"].values
+
+        print("Calculating |point-biserial r| for CpGs vs sex")
+        correlations = {}
+
+        for i in cpg_cols:
+            x = train_data[i].fillna(train_data[i].median()).values
+            r, _ = pearsonr(x, y)
+            correlations[i] = abs(r)
+
+        top20 = sorted(correlations, key=correlations.get, reverse=True)[:20]
+        top20_vals = [correlations[i] for i in top20]
+        print(top20[0], f"r={top20_vals[0]}")
+
+        plt.figure(figsize=(10, 6))
+        plt.barh(top20[::-1], top20_vals[::-1], edgecolor="black")
+        plt.xlabel("|Point-biserial r| with sex")
+        plt.title("Top 20 sex-discriminative CpGs")
+        plt.tight_layout()
+        plt.savefig(path, dpi=150, bbox_inches="tight")
+        plt.show()
+        plt.close()
+#######################################################################################
+def classifier_boxplots(lr_scores, gnb_scores, path="../figures/classifier_boxplots_sex.png"):
+    os.makedirs("../figures", exist_ok=True)
+
+    fig, axes = plt.subplots(3, 2, figsize=(12, 12))
+
+    metrics = [
+        ("accuracy_scores", "Accuracy", "Accuracy"),
+        ("f1_scores", "F1 Score", "F1"),
+        ("mcc_scores", "MCC", "MCC"),
+        ("roc_auc_scores", "ROC-AUC", "ROC-AUC"),
+        ("pr_auc_scores", "PR-AUC", "PR-AUC")
+    ]
+
+    flat_axes = axes.flatten()
+
+    for ax, (key, title, ylabel) in zip(flat_axes, metrics):
+        data = [lr_scores[key], gnb_scores[key]]
+        labels = ["Logistic Regression", "Gaussian NB"]
+
+        ax.boxplot(data, labels=labels)
+        ax.set_title(title)
+        ax.set_ylabel(ylabel)
+
+    # Hide the unused last subplot
+    flat_axes[-1].axis("off")
+
+    plt.tight_layout()
+    plt.savefig(path, dpi=150, bbox_inches="tight")
+    plt.show()
+    plt.close()
