@@ -998,7 +998,7 @@ def selection_save_final(tuned_results,tuned_models,model_dir="../models", model
     return selected_name, reloaded_model, path
 
 #######################################################################################
-def plot_best_model_real_predict(y_true, y_predict, model_name, dir="figures"):
+def plot_best_model_real_predict(y_true, y_predict, model_name, dir="../figures"):
     y_true = np.asarray(y_true)
     y_predict = np.asarray(y_predict)
 
