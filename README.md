@@ -74,6 +74,6 @@ Following hyperparameter tuning and final evaluation on the locked evaluation se
 [✓] Task 2  
 [✓] Task 3  
 [✓] Task 4  
-[X] Bonus A   
-[X] Bonus B  
+[✓] Bonus A   
+[✓] Bonus B  
 
