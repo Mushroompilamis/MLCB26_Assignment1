@@ -1,4 +1,5 @@
 #Libraries
+#######################################################################################
 import sys
 import os
 import pickle
@@ -21,6 +22,7 @@ from scipy.stats import loguniform,uniform
 from mrmr import mrmr_regression
 import optuna
 
+#######################################################################################
 #######################################################################################
 ###########TASK 1###########
 # 1.2 Preprocessing
@@ -236,6 +238,7 @@ def age_split_plot(train_data, val_data, eval_data):
     plt.show()
     plt.close()
 
+#######################################################################################
 #######################################################################################
 ###########TASK 2###########
 # 2.1  OLS LinearRegression across feature sets
@@ -470,15 +473,16 @@ def train_vs_val_all_models(models, X_train, y_train, X_val, y_val):
     return pd.DataFrame(rows)
 
 #######################################################################################
+#######################################################################################
 ###########TASK 3###########
 #3.1  Stability Selection
-def stability_selection(X_train,resamples=50,samples_frac=0.80,top_k=200,seed=42):
-    cpg_cols=[j for j in X_train.columns if j.startswith("cg")]
+def stability_selection(train_data,resamples=50,samples_frac=0.80,top_k=200,seed=42):
+    cpg_cols=[j for j in train_data.columns if j.startswith("cg")]
     counts=pd.Series(0, index=cpg_cols,dtype=int)
     for i in range(resamples):
-        sub=X_train.sample(frac=samples_frac,replace=False,random_state=seed + i)
+        sub=train_data.sample(frac=samples_frac,replace=False,random_state=seed + i)
         #CpG within each subsample
-        imputer=SimpleImputer(strategy="mean")
+        imputer=SimpleImputer(strategy="median")
         sub_cpg=pd.DataFrame(imputer.fit_transform(sub[cpg_cols]),columns=cpg_cols,index=sub.index)
         sub_age=sub["age"]
 
@@ -498,7 +502,7 @@ def stability_selection(X_train,resamples=50,samples_frac=0.80,top_k=200,seed=42
 def frequencyplot(counts, path="../figures/stability_selection.png"):
     plt.figure(figsize=(8, 5))
     plt.hist(counts.values, bins=20, edgecolor="black")
-    plt.axvline(25, color="red", linestyle="--", label="threshold > 25")
+    plt.axvline(25, color="red", linestyle="--", label="threshold of 25")
     plt.xlabel("Selection  Frequency (out of 50 resamples) ")
     plt.ylabel("Number of CpGs")
     plt.title("Selection-frequency distribution across CpG features")
@@ -508,42 +512,43 @@ def frequencyplot(counts, path="../figures/stability_selection.png"):
     plt.show()
     plt.close()
 
-
+#######################################################################################
 #3.2   Minimum Redundancy Maximum Relevance  (mRMR)
-def choosing_k_value(X_train, X_val, k_values=None, path="../figures/mrmr_k_selection.png"):
+def choosing_k_value(train_data, val_data, k_values=None, path="../figures/mrmr_k_selection.png"):
     if k_values is None:
         k_values = [40,60,80,100,120,150,180,200]
 
-    cpg_cols = [i for i in X_train.columns if i.startswith("cg")]
+    cpg_cols = [i for i in train_data.columns if i.startswith("cg")]
     results = []
 
     for k in k_values:
         print(f"Testing k: {k}")
         mrmr_features = mrmr_regression(
-            X=X_train[cpg_cols],
-            y=X_train["age"],
+            X=train_data[cpg_cols],
+            y=train_data["age"],
             K=k
         )
         # preprocess CpGs
         preprocessor = preprocessor_pipeline(cpg=mrmr_features, metadata=[])
-        X_train_processed = preprocessor.fit_transform(X_train[mrmr_features])
-        X_val_processed = preprocessor.transform(X_val[mrmr_features])
+        X_train_processed = preprocessor.fit_transform(train_data[mrmr_features])
+        X_val_processed = preprocessor.transform(val_data[mrmr_features])
 
         # model of choice BR
         model = BayesianRidge()
-        model.fit(X_train_processed, X_train["age"])
+        model.fit(X_train_processed, train_data["age"])
         y_val_predict = model.predict(X_val_processed)
-        rmse = mean_squared_error(X_val["age"], y_val_predict) ** 0.5
-        r2=r2_score(X_val["age"], y_val_predict)
+        rmse = mean_squared_error(val_data["age"], y_val_predict) ** 0.5
+        r2=r2_score(val_data["age"], y_val_predict)
         results.append({"K": k,"Validation RMSE": rmse,"Validation R^2": r2})
         print(f"K: {k} with Validation RMSE: {rmse:.4f} and Validation R^2: {r2:.4f}")
 
     #dataframe of results
     results = pd.DataFrame(results)
-    b_rmse = results["Validation RMSE"].min()
-    b_candidates = results[results["Validation RMSE"] == b_rmse]
-    b_k = b_candidates["K"].min()
-    print(f"\nThe best chosen K is: {b_k} with Validation RMSE: {b_rmse:.4f} and Validation R^2:{r2:.4f}")
+    best_row = results.loc[results["Validation RMSE"].idxmin()]
+    b_k = best_row["K"]
+    b_rmse = best_row["Validation RMSE"]
+    b_r2 = best_row["Validation R^2"]
+    print(f"\nThe best chosen K is: {b_k} with Validation RMSE: {b_rmse:.4f} and Validation R^2:{b_r2:.4f}")
 
     # Plot k vs RMSE
     plt.figure(figsize=(7, 4))
@@ -558,18 +563,19 @@ def choosing_k_value(X_train, X_val, k_values=None, path="../figures/mrmr_k_sele
     return b_k, results
 
 
-def mrmr_function(X_train, k):
-    cpg_cols = [i for i in X_train.columns if i.startswith("cg")]
+def mrmr_function(train_data, k):
+    k=int(k)
+    cpg_cols = [i for i in train_data.columns if i.startswith("cg")]
     imputer=SimpleImputer(strategy="median")
-    X_train_cpg =pd.DataFrame(imputer.fit_transform(X_train[cpg_cols]),columns=cpg_cols,index=X_train.index)
-    y_train = X_train["age"]
+    X_train_cpg =pd.DataFrame(imputer.fit_transform(train_data[cpg_cols]),columns=cpg_cols,index=train_data.index)
+    y_train = train_data["age"]
 
     mrmr_features = mrmr_regression(X=X_train_cpg, y=y_train, K=k)
     print(f"Selected mRMR {k} features.")
 
     top10_sfeatures = []
     for rank, feat in enumerate(mrmr_features[:10], start=1):
-        corr, _ = spearmanr(X_train_cpg[feat], X_train["age"])
+        corr, _ = spearmanr(X_train_cpg[feat], train_data["age"])
         top10_sfeatures.append({
             "Rank": rank,
             "Feature": feat,
@@ -580,7 +586,7 @@ def mrmr_function(X_train, k):
     print(top10.to_string(index=False))
     return mrmr_features, top10
 
-
+#######################################################################################
 def overlapping_plot(stability_features, mrmr_features, path="../figures/feature_overlap.png"):
     set_stability = set(stability_features)
     set_mrmr = set(mrmr_features)
@@ -611,8 +617,9 @@ def overlapping_plot(stability_features, mrmr_features, path="../figures/feature
 
     return overlap_df
 
+#######################################################################################
 #3.3  Method comparison and selection
-def feature_comparison(X_train,X_val,stable_features,mrmr_features,b_k):
+def feature_comparison(train_data,val_data,stable_features,mrmr_features,b_k):
     stable_cpg = list(stable_features.index) if hasattr(stable_features, "index") else list(stable_features)
     mrmr_cpg = list(mrmr_features)
     results = []
@@ -621,11 +628,11 @@ def feature_comparison(X_train,X_val,stable_features,mrmr_features,b_k):
         # preprocessing only on selected CpGs
         preprocessor = preprocessor_pipeline(cpg=feature, metadata=[])
 
-        X_train_processed = preprocessor.fit_transform(X_train[feature])
-        X_val_processed = preprocessor.transform(X_val[feature])
+        X_train_processed = preprocessor.fit_transform(train_data[feature])
+        X_val_processed = preprocessor.transform(val_data[feature])
 
-        y_train = X_train["age"].values
-        y_val = X_val["age"].values
+        y_train = train_data["age"].values
+        y_val = val_data["age"].values
 
         # model of use BR
         model, y_val_predict = bayesianridge_model(X_train_processed,y_train,X_val_processed)
@@ -670,6 +677,8 @@ def feature_comparison(X_train,X_val,stable_features,mrmr_features,b_k):
 
     return comparison_df, selected_features, selected_method
 
+#######################################################################################
+#######################################################################################
 ###########TASK 4###########
 # 4.1  Hyperparameter tuning
 def model_tuning(dev_data,selected_features,trails=40,seed=42):
@@ -747,7 +756,6 @@ def model_tuning(dev_data,selected_features,trails=40,seed=42):
     #print("Best BayesianRidge params:", bayes_search.best_params_)
     #print("Best BayesianRidge CV RMSE:", -bayes_search.best_score_)
 
-
     best_models = {
         "ElasticNet": elastic_search.best_estimator_,
         "SVR": svr_search.best_estimator_,
@@ -756,27 +764,27 @@ def model_tuning(dev_data,selected_features,trails=40,seed=42):
 
     # dataset of best scores
     tuning_results = pd.DataFrame([
-        {   "Best Scores"
+        {
             "Model": "ElasticNet",
-            "RMSE": -elastic_search.best_score_,
-            "Params": elastic_search.best_params_
+            "Best RMSE": -elastic_search.best_score_,
+            "Best Params": elastic_search.best_params_
         },
-        {   "Best Scores"
+        {
             "Model": "SVR",
-            "RMSE": -svr_search.best_score_,
-            "Params": svr_search.best_params_
+            "Best RMSE": -svr_search.best_score_,
+            "Best Params": svr_search.best_params_
         },
-        {   "Best Scores"
+        {
             "Model": "BayesianRidge",
-            "RMSE": -bayes_search.best_score_,
-            "Params": bayes_search.best_params_
+            "Best RMSE": -bayes_search.best_score_,
+            "Best Params": bayes_search.best_params_
         }
     ])
 
     return best_models, tuning_results
 
 
-
+#######################################################################################
 # 4.2  Final model evaluation
 #Evaluation
 def evaluation(model, eval_data, best_features, bootstrap=1000, seed=42):
@@ -800,6 +808,10 @@ def evaluation(model, eval_data, best_features, bootstrap=1000, seed=42):
         mae = mean_absolute_error(y_sample, y_pred_sample)
         r2 = r2_score(y_sample, y_pred_sample)
         r, _ = pearsonr(y_sample, y_pred_sample)
+        if np.std(y_sample) == 0 or np.std(y_pred_sample) ==0:
+         r = np.na
+        else:
+         r, _ =pearsonr(y_sample, y_pred_sample)
     ####################################
         rmse_scores.append(rmse)
         mae_scores.append(mae)
@@ -812,24 +824,24 @@ def evaluation(model, eval_data, best_features, bootstrap=1000, seed=42):
 
     ####################################
     results = {
-        "RMSE_mean": rmse_scores.mean(),
-        "RMSE_std": rmse_scores.std(ddof=1),
-        "RMSE_CI": np.percentile(rmse_scores, [2.5, 97.5]),
+        "RMSE_mean": np.nanmean(rmse_scores),
+        "RMSE_std": np.nanstd(rmse_scores, ddof=1),
+        "RMSE_CI": np.nanpercentile(rmse_scores, [2.5, 97.5]),
         "rmse_scores": rmse_scores,
 
-        "MAE_mean": mae_scores.mean(),
-        "MAE_std": mae_scores.std(ddof=1),
-        "MAE_CI": np.percentile(mae_scores, [2.5, 97.5]),
+        "MAE_mean": np.nanmean(mae_scores),
+        "MAE_std": np.nanstd(mae_scores, ddof=1),
+        "MAE_CI": np.nanpercentile(mae_scores, [2.5, 97.5]),
         "mae_scores": mae_scores,
 
-        "R2_mean": r2_scores.mean(),
-        "R2_std": r2_scores.std(ddof=1),
-        "R2_CI": np.percentile(r2_scores, [2.5, 97.5]),
+        "R2_mean": np.nanmean(r2_scores),
+        "R2_std": np.nanstd(r2_scores, ddof=1),
+        "R2_CI": np.nanpercentile(r2_scores, [2.5, 97.5]),
         "r2_scores": r2_scores,
 
-        "Pearson_mean": pearson_scores.mean(),
-        "Pearson_std": pearson_scores.std(ddof=1),
-        "Pearson_CI": np.percentile(pearson_scores, [2.5, 97.5]),
+        "Pearson_mean": np.nanmean(pearson_scores),
+        "Pearson_std": np.nanstd(pearson_scores, ddof=1),
+        "Pearson_CI": np.nanpercentile(pearson_scores, [2.5, 97.5]),
         "pearson_scores": pearson_scores
     }
 
@@ -841,27 +853,37 @@ def evaluation(model, eval_data, best_features, bootstrap=1000, seed=42):
 
     return results
 
-
-#table asked
-def query_table(model, stage_res):
+#######################################################################################
+# Table asked
+def query_table(model_name, stage_results):
     rows = []
 
-    for stage, res in stage_res.items():
+    for stage, res in stage_results.items():
+        # taking keys from all tasks
+        rmse_mean = res["RMSE_mean"] if "RMSE_mean" in res else res["rmse_mean"]
+        rmse_ci = res["RMSE_CI"] if "RMSE_CI" in res else res["rmse_ci"]
+
+        mae_mean = res["MAE_mean"] if "MAE_mean" in res else res["mae_mean"]
+
+        r2_mean = res["R2_mean"] if "R2_mean" in res else res["r2_mean"]
+
+        pearson_mean = res["Pearson_mean"] if "Pearson_mean" in res else res["pearson_mean"]
+
         rows.append({
-            "Model": model,
+            "Model": model_name,
             "Stage": stage,
-            "RMSE_mean": f"{res['RMSE_mean']:.3f}",
-            "95% CI": f"[{res['RMSE_CI'][0]:.3f}, {res['RMSE_CI'][1]:.3f}]",
-            "MAE": f"{res['MAE_mean']:.3f}",
-            "R²": f"{res['R2_mean']:.3f}",
-            "Pearson r": f"{res['Pearson_mean']:.3f}"
+            "RMSE (mean)": f"{rmse_mean:.3f}",
+            "95% CI": f"[{rmse_ci[0]:.3f}, {rmse_ci[1]:.3f}]",
+            "MAE": f"{mae_mean:.3f}",
+            "R²": f"{r2_mean:.3f}",
+            "Pearson r": f"{pearson_mean:.3f}"
         })
 
     df = pd.DataFrame(rows)
-    print(df.to_string(index=False))
     return df
 
 
+#######################################################################################
 #boxplots
 def bootstrap_boxplots_4_2(results_dict, path="../figures/final_bootstrap_boxplots.png"):
     model_names = list(results_dict.keys())
@@ -898,8 +920,8 @@ def bootstrap_boxplots_4_2(results_dict, path="../figures/final_bootstrap_boxplo
     plt.show()
     plt.close()
 
+#######################################################################################
 def scatter_plot_realvspredicted(models_dict, eval_data, best_features, path="../figures/realvspredicted_scatter_plot.png"):
-
     X_eval = eval_data[best_features]
     y_eval = eval_data["age"].values
 
@@ -911,7 +933,7 @@ def scatter_plot_realvspredicted(models_dict, eval_data, best_features, path="..
         axis.scatter(y_eval, y_predict, edgecolor="black",alpha=0.7)
         min_val = min(y_eval.min(), y_predict.min())
         max_val = max(y_eval.max(), y_predict.max())
-        axis.plot([min_val, max_val],[min_val, max_val],color="red",linestyle="--",linewidth=2,label="Ideal fit")
+        axis.plot([min_val, max_val],[min_val, max_val],color="yellow",linestyle="--",linewidth=2,label="Ideal fit")
         axis.set_title(model_name)
         axis.set_xlabel("Actual Age")
         axis.set_ylabel("Predicted Age")
@@ -921,11 +943,12 @@ def scatter_plot_realvspredicted(models_dict, eval_data, best_features, path="..
     plt.show()
     plt.close()
 
-def fs_eval_models(X_train, X_val, selected_features):
-    X_tr = X_train[selected_features]
-    X_v = X_val[selected_features]
-    y_train = X_train["age"].values
-    y_val = X_val["age"].values
+#######################################################################################
+def fs_eval_models(train_data, val_data, selected_features):
+    X_tr = train_data[selected_features]
+    X_v = val_data[selected_features]
+    y_train = train_data["age"].values
+    y_val = val_data["age"].values
     #################
     preprocessor = preprocessor_pipeline(cpg=selected_features, metadata=[])
     X_train_processed = preprocessor.fit_transform(X_tr)
@@ -942,9 +965,9 @@ def fs_eval_models(X_train, X_val, selected_features):
 
     return elastic_fs, svr_fs, bayes_fs
 
+#######################################################################################
 #4.3  Model selection and final model
-
-def selection_save_final(tuned_results,tuned_models,model_dir="models", model_filename="best_model.pkl"):
+def selection_save_final(tuned_results,tuned_models,model_dir="../models", model_filename="best_model.pkl"):
     rmse_summary = {
         model_name: result_dict["RMSE_mean"]
         for model_name, result_dict in tuned_results.items()
@@ -974,7 +997,7 @@ def selection_save_final(tuned_results,tuned_models,model_dir="models", model_fi
 
     return selected_name, reloaded_model, path
 
-
+#######################################################################################
 def plot_best_model_real_predict(y_true, y_predict, model_name, dir="figures"):
     y_true = np.asarray(y_true)
     y_predict = np.asarray(y_predict)
@@ -997,5 +1020,6 @@ def plot_best_model_real_predict(y_true, y_predict, model_name, dir="figures"):
     plt.show()
     plt.close()
 
-
+#######################################################################################
+###########BONUS A###########
 
