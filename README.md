@@ -48,7 +48,7 @@ To stimulate real world conditions, some CpG values were randomly set to NaN.
 <li> src/ —functions.py (All pipeline functions) </li>
 <li>notebooks/ — Jupyter notebook (data_exploration.ipynb and model_analysis.ipynb (final) with all the Tasks execution)</li>
 <li>data/ — dataset files (.gitignore for data commitment)</li>
-<li>models/ — saved best model (best_model.okl)</li>
+<li>models/ — saved best model (best_model.pkl)</li>
 <li>figures/ — generated plots (Saved plots that were generated from data_exploration.ipynb)</li>
 </ul>
 

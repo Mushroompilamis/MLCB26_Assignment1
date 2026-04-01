@@ -813,7 +813,7 @@ def evaluation(model, eval_data, best_features, bootstrap=1000, seed=42):
         r2 = r2_score(y_sample, y_pred_sample)
         r, _ = pearsonr(y_sample, y_pred_sample)
         if np.std(y_sample) == 0 or np.std(y_pred_sample) ==0:
-         r = np.na
+         r = np.nan
         else:
          r, _ =pearsonr(y_sample, y_pred_sample)
     ####################################
@@ -1283,7 +1283,7 @@ def prepare_sex_classification_data(train_data, eval_data, sex_features):
 #######################################################################################
 def training_classifiers(X_train, y_train):
     print("Training Logistic Regression")
-    lr = LogisticRegression(random_state=42)
+    lr = LogisticRegression(random_state=42,max_iter=2000)
     lr.fit(X_train, y_train)
 
     print("Training Gaussian Naive Bayes")
